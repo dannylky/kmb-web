@@ -1,0 +1,1026 @@
+<!DOCTYPE html>
+<html lang="zh-HK">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>KMB 巴士即時到站</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: -apple-system, 'Segoe UI', Roboto, 'Noto Sans TC', sans-serif; background: #0d0d1a; color: #d0d0d8; min-height: 100vh; }
+
+  .header { background: linear-gradient(135deg, #0d0d1a, #16213e); color: #fff; padding: 16px 24px 0; position: -webkit-sticky; position: sticky; top: 0; z-index: 100; box-shadow: 0 2px 12px rgba(0,0,0,.4); }
+  .header h1 { font-size: 20px; font-weight: 700; padding-bottom: 12px; }
+  .header h1 small { font-size: 12px; font-weight: 400; opacity: .7; margin-left: 8px; }
+
+  .tabs { display: flex; gap: 0; }
+  .tab { padding: 10px 24px; font-size: 14px; font-weight: 600; background: none; border: none; color: rgba(255,255,255,.5); cursor: pointer; border-bottom: 3px solid transparent; transition: all .2s; -webkit-appearance: none; -moz-appearance: none; appearance: none; }
+  .tab:hover { color: rgba(255,255,255,.8); }
+  .tab.active { color: #fff; border-bottom-color: #00a862; }
+
+  .panel { display: none; }
+  .panel.active { display: block; }
+
+  .controls { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 12px; align-items: center; }
+  .search-wrap { position: relative; flex: 1; min-width: 160px; max-width: 320px; }
+  .search-wrap input { width: 100%; font-size: 15px; padding: 8px 14px; border: 1px solid rgba(255,255,255,.15); border-radius: 8px; background: rgba(255,255,255,.08); color: #e0e0e8; outline: none; transition: all .2s; }
+  .search-wrap input::placeholder { color: rgba(255,255,255,.4); }
+  .search-wrap input:focus { background: rgba(255,255,255,.14); border-color: rgba(255,255,255,.3); }
+
+  .search-dropdown { position: absolute; top: 100%; left: 0; right: 0; margin-top: 4px; background: #1a1a2e; border: 1px solid rgba(255,255,255,.1); border-radius: 10px; box-shadow: 0 4px 24px rgba(0,0,0,.5); max-height: 320px; overflow-y: auto; display: none; z-index: 200; }
+  .search-dropdown.open { display: block; }
+  .search-dropdown .sd-item { padding: 10px 14px; cursor: pointer; display: flex; align-items: center; gap: 10px; border-bottom: 1px solid rgba(255,255,255,.06); transition: background .12s; }
+  .search-dropdown .sd-item:last-child { border-bottom: none; }
+  .search-dropdown .sd-item:hover,
+  .search-dropdown .sd-item.highlighted { background: rgba(0,168,98,.12); }
+  .search-dropdown .sd-item .sd-route { font-size: 16px; font-weight: 700; color: #00a862; min-width: 48px; }
+  .search-dropdown .sd-item .sd-dest { font-size: 13px; color: #a0a0b0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .search-dropdown .sd-item .sd-dir { font-size: 11px; background: rgba(0,168,98,.18); color: #4ade80; padding: 2px 8px; border-radius: 6px; font-weight: 600; margin-left: auto; flex-shrink: 0; }
+  .search-dropdown .sd-empty { padding: 20px; text-align: center; color: #666; font-size: 13px; }
+
+  .controls button { font-size: 14px; padding: 8px 14px; border: 1px solid rgba(255,255,255,.15); border-radius: 8px; background: rgba(255,255,255,.08); color: #e0e0e8; cursor: pointer; transition: all .2s; white-space: nowrap; -webkit-appearance: none; -moz-appearance: none; appearance: none; }
+  .controls button:hover { background: rgba(255,255,255,.15); }
+  .controls .dir-btn { padding: 8px 16px; border-radius: 20px; font-weight: 600; border-color: rgba(255,255,255,.2); }
+  .controls .dir-btn.active { background: #00a862; border-color: #00a862; color: #fff; }
+  .controls .dir-btn:disabled { opacity: .4; cursor: not-allowed; }
+  .controls .add-btn { background: #2563eb; border-color: #2563eb; font-weight: 600; color: #fff; }
+  .controls .add-btn:hover { background: #1d4ed8; border-color: #1d4ed8; }
+  .auto-refresh-label { font-size: 13px; display: flex; align-items: center; gap: 5px; cursor: pointer; opacity: .8; user-select: none; white-space: nowrap; color: #c0c0c8; }
+  @supports (accent-color: #00a862) {
+    .auto-refresh-label input { accent-color: #00a862; width: 15px; height: 15px; cursor: pointer; }
+  }
+  @supports not (accent-color: #00a862) {
+    .auto-refresh-label input { width: 15px; height: 15px; cursor: pointer; }
+  }
+
+  .bookmark-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(360px, 1fr)); gap: 14px; padding: 16px; max-width: 1520px; margin: 0 auto; }
+  @media (min-width: 1160px) { .bookmark-grid { grid-template-columns: repeat(2, 1fr); } }
+  @media (min-width: 1540px) { .bookmark-grid { grid-template-columns: repeat(3, 1fr); } }
+  @media (min-width: 1920px) { .bookmark-grid { grid-template-columns: repeat(4, 1fr); } }
+
+  .card { background: #1a1a2e; border-radius: 12px; box-shadow: 0 2px 8px rgba(0,0,0,.25); overflow: hidden; display: flex; flex-direction: column; border: 1px solid rgba(255,255,255,.06); }
+  .card-head { display: flex; align-items: center; gap: 10px; padding: 12px 14px 8px; }
+  .card-head .rnum { font-size: 22px; font-weight: 800; color: #00a862; }
+  .card-head .rdir { font-size: 12px; background: rgba(255,255,255,.08); padding: 2px 8px; border-radius: 10px; color: #a0a0b0; }
+  .card-head .rmeta { margin-left: auto; display: flex; align-items: center; gap: 6px; }
+  .card-head .updated { font-size: 11px; color: #666; }
+  .card-head .del-btn { font-size: 18px; line-height: 1; background: none; border: none; color: #555; cursor: pointer; padding: 0 4px; transition: color .2s; }
+  .card-head .del-btn:hover { color: #ef4444; }
+  .card-path { padding: 0 14px 8px; font-size: 13px; color: #a0a0b0; display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+  .card-path .arrow { color: #00a862; font-weight: 700; }
+  .card-stops { flex: 1; overflow-y: auto; max-height: 480px; padding: 0 6px 8px; }
+  .card-stops .stop { display: flex; align-items: center; padding: 6px 8px; gap: 8px; border-left: 3px solid rgba(255,255,255,.1); margin-bottom: 2px; border-radius: 0 6px 6px 0; transition: background .15s; }
+  .card-stops .stop:hover { background: rgba(255,255,255,.04); }
+  .card-stops .stop.has-eta { border-left-color: #4ecdc4; }
+  .card-stops .stop.arriving { border-left-color: #16a34a; background: rgba(22,163,74,.1); }
+  .card-stops .stop.due { border-left-color: #f59e0b; background: rgba(245,158,11,.1); }
+  .card-stops .stop.later { border-left-color: #2563eb; }
+  .card-stops .s-seq { font-size: 11px; font-weight: 700; color: #555; min-width: 22px; text-align: center; flex-shrink: 0; }
+  .card-stops .s-name { flex: 1; font-size: 13px; font-weight: 500; color: #c0c0c8; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .card-stops .s-eta { text-align: right; min-width: 60px; flex-shrink: 0; }
+  .card-stops .s-eta .t { font-size: 14px; font-weight: 700; white-space: nowrap; }
+  .card-stops .s-eta .t.arriving { color: #22c55e; }
+  .card-stops .s-eta .t.due { color: #f59e0b; }
+  .card-stops .s-eta .t.later { color: #60a5fa; }
+  .card-stops .s-eta .t.no-eta { color: #555; }
+  .card-stops .s-eta .badge { display: inline-block; font-size: 10px; font-weight: 600; padding: 1px 6px; border-radius: 8px; margin-left: 4px; }
+  .card-stops .s-eta .badge.arriving { background: #16a34a; color: #fff; }
+  .card-stops .s-eta .badge.no-eta { background: rgba(255,255,255,.08); color: #666; }
+  .card-stops .s-eta .badge.due { background: #f59e0b; color: #fff; }
+
+  .empty-state { text-align: center; padding: 80px 20px; color: #555; }
+  .empty-state .icon { font-size: 48px; margin-bottom: 12px; opacity: .5; }
+  .empty-state h2 { font-size: 18px; font-weight: 600; color: #888; }
+  .empty-state p { font-size: 14px; margin-top: 6px; color: #666; }
+
+  .global-loading { text-align: center; padding: 30px; color: #666; }
+  .global-loading .spinner { width: 32px; height: 32px; border: 3px solid rgba(255,255,255,.1); border-top-color: #00a862; border-radius: 50%; animation: spin .8s linear infinite; margin: 0 auto 10px; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  @-webkit-keyframes spin { to { -webkit-transform: rotate(360deg); transform: rotate(360deg); } }
+
+  .last-updated-bar { text-align: center; font-size: 12px; color: #555; padding: 6px 16px 16px; }
+
+  .hsuhk-dash { padding: 16px; max-width: 1200px; margin: 0 auto; }
+  .hsuhk-header { background: #1a1a2e; border: 1px solid rgba(255,255,255,.06); border-radius: 12px; padding: 16px 20px; box-shadow: 0 2px 8px rgba(0,0,0,.2); margin-bottom: 14px; display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
+  .hsuhk-header .stop-name { font-size: 18px; font-weight: 700; color: #e0e0e8; }
+  .hsuhk-header .stop-name small { font-size: 13px; font-weight: 400; color: #666; margin-left: 8px; }
+  .hsuhk-header .dash-updated { margin-left: auto; font-size: 12px; color: #555; }
+  .hsuhk-header .dash-count { font-size: 13px; background: rgba(255,255,255,.06); padding: 4px 12px; border-radius: 16px; color: #888; }
+
+  .dash-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(360px, 1fr)); gap: 10px; }
+  .dash-card { background: #1a1a2e; border: 1px solid rgba(255,255,255,.06); border-radius: 10px; box-shadow: 0 2px 6px rgba(0,0,0,.2); overflow: hidden; border-left: 4px solid rgba(255,255,255,.12); transition: box-shadow .2s; }
+  .dash-card:hover { box-shadow: 0 4px 16px rgba(0,0,0,.35); }
+  .dash-card.arriving { border-left-color: #16a34a; }
+  .dash-card.due { border-left-color: #f59e0b; }
+  .dash-card.later { border-left-color: #2563eb; }
+  .dash-card .d-route-bar { display: flex; align-items: center; gap: 8px; padding: 10px 14px 6px; }
+  .dash-card .d-route { font-size: 20px; font-weight: 800; color: #00a862; min-width: 48px; }
+  .dash-card .d-dir-section { padding: 4px 14px 10px; }
+  .dash-card .d-dir-section + .d-dir-section { border-top: 1px solid rgba(255,255,255,.06); padding-top: 10px; }
+  .dash-card .d-dir-head { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; }
+  .dash-card .d-dir-label { font-size: 11px; background: rgba(255,255,255,.08); padding: 2px 10px; border-radius: 8px; color: #888; font-weight: 600; }
+  .dash-card .d-dest { font-size: 13px; color: #a0a0b0; flex: 1; }
+  .dash-card .d-stop-info { font-size: 12px; color: #666; display: flex; align-items: center; gap: 4px; margin-bottom: 6px; }
+  .dash-card .d-stop-info .stop-seq { font-weight: 700; color: #888; min-width: 20px; text-align: center; }
+  .dash-card .d-stop-info .stop-name { color: #666; }
+  .dash-card .d-etas { display: flex; gap: 6px; flex-wrap: wrap; }
+  .dash-card .d-eta-item { display: flex; align-items: center; gap: 4px; font-size: 13px; padding: 4px 10px; border-radius: 8px; background: rgba(255,255,255,.06); }
+  .dash-card .d-eta-item .d-time { font-weight: 700; font-size: 15px; white-space: nowrap; }
+  .dash-card .d-eta-item .d-time.arriving { color: #22c55e; }
+  .dash-card .d-eta-item .d-time.due { color: #f59e0b; }
+  .dash-card .d-eta-item .d-time.later { color: #60a5fa; }
+  .dash-card .d-remark { font-size: 11px; color: #555; margin-top: 4px; font-style: italic; }
+  .dash-card .d-no-eta { font-size: 12px; color: #555; }
+
+  @media (max-width: 600px) {
+    .header h1 { font-size: 17px; }
+    .header h1 small { display: none; }
+    .tab { padding: 10px 14px; font-size: 13px; }
+    .search-wrap { max-width: none; flex: auto; width: 100%; }
+    .bookmark-grid { grid-template-columns: 1fr; padding: 10px; gap: 10px; }
+    .card-stops { max-height: 360px; }
+    .controls .add-btn { flex: 1; text-align: center; }
+    .dash-grid { grid-template-columns: 1fr; }
+  }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <h1>🚍 KMB 巴士即時到站 <small>九巴實時到站監控面板</small></h1>
+  <div class="tabs">
+    <button class="tab active" data-tab="hsuhk">🏫 恒大概覽</button>
+    <button class="tab" data-tab="mplus">🎨 M+ 西九</button>
+    <button class="tab" data-tab="bookmarks">📌 我的路線</button>
+  </div>
+</div>
+
+<div id="panel-bookmarks" class="panel">
+  <div style="padding:12px 24px">
+    <div class="controls">
+      <div class="search-wrap">
+        <input type="text" id="routeInput" placeholder="搜尋路線 (例: 1A, 74X)" autocomplete="off">
+        <div class="search-dropdown" id="searchDropdown"></div>
+      </div>
+      <button class="dir-btn active" id="dirInbound" data-dir="inbound">回程</button>
+      <button class="dir-btn" id="dirOutbound" data-dir="outbound">去程</button>
+      <button class="add-btn" id="addBtn">＋ 加入面板</button>
+      <label class="auto-refresh-label"><input type="checkbox" id="autoRefresh" checked> 每10秒更新</label>
+    </div>
+  </div>
+
+  <div id="emptyState" class="empty-state">
+    <div class="icon">🚍</div>
+    <h2>尚未加入任何路線</h2>
+    <p>在上方搜尋路線號碼，選擇方向後點擊「加入面板」</p>
+  </div>
+
+  <div id="globalLoading" class="global-loading" style="display:none">
+    <div class="spinner"></div>
+    <p>正在更新所有路線...</p>
+  </div>
+
+  <div class="bookmark-grid" id="grid"></div>
+
+  <div class="last-updated-bar" id="lastUpdatedBar" style="display:none">
+    最後批次更新: <span id="batchUpdateTime"></span>
+  </div>
+</div>
+
+<div id="panel-hsuhk" class="panel active">
+  <div class="hsuhk-dash">
+    <div class="hsuhk-header">
+      <div><span class="stop-name">🏫 香港恒生大學 <small>THE HANG SENG UNIVERSITY OF HONG KONG</small></span></div>
+      <span class="dash-count" id="dashCount">—</span>
+      <span class="dash-updated" id="dashUpdated"></span>
+    </div>
+    <div class="dash-grid" id="dashGrid"></div>
+  </div>
+  <div class="last-updated-bar" id="dashUpdatedBar" style="display:none">
+    最後更新: <span id="dashUpdateTime"></span>
+  </div>
+</div>
+
+<div id="panel-mplus" class="panel">
+  <div class="hsuhk-dash">
+    <div class="hsuhk-header">
+      <div><span class="stop-name">🎨 M+ 西九文化區 <small>WEST KOWLOON CULTURAL DISTRICT</small></span></div>
+      <span class="dash-count" id="mplusCount">—</span>
+      <span class="dash-updated" id="mplusUpdated"></span>
+    </div>
+    <div class="dash-grid" id="mplusGrid"></div>
+  </div>
+  <div class="last-updated-bar" id="mplusUpdatedBar" style="display:none">
+    最後更新: <span id="mplusUpdateTime"></span>
+  </div>
+</div>
+
+<script>
+const API = 'https://data.etabus.gov.hk/v1/transport/kmb';
+const GMB_API = 'https://data.etagmb.gov.hk';
+const LS_KEY = 'kmb_bookmarks';
+const HSUHK_STOPS = ['3F01C915E856B018', 'BC39BFC3C7BC3009'];
+const HSUHK_GMB_STOPS = ['20002290', '20002295'];
+const HSUHK_GMB_ROUTES = [
+  { route: '808', route_id: 2004758, route_seq: 1, stop_seq: 15, gmb_stop: '20002290', dirKey: 'outbound', orig: '錦英苑', dest: '威爾斯親王醫院' },
+  { route: '808', route_id: 2004758, route_seq: 2, stop_seq: 5, gmb_stop: '20002295', dirKey: 'inbound', orig: '威爾斯親王醫院', dest: '錦英苑' },
+  { route: '806A', route_id: 2001821, route_seq: 1, stop_seq: 5, gmb_stop: '20002290', dirKey: 'outbound', orig: '黃泥頭', dest: '運頭塘' },
+  { route: '806A', route_id: 2001821, route_seq: 2, stop_seq: 27, gmb_stop: '20002295', dirKey: 'inbound', orig: '運頭塘', dest: '黃泥頭' },
+  { route: '806X', route_id: 2011226, route_seq: 1, stop_seq: 5, gmb_stop: '20002290', dirKey: 'outbound', orig: '黃泥頭', dest: '運頭塘' },
+  { route: '806X', route_id: 2011226, route_seq: 2, stop_seq: 18, gmb_stop: '20002295', dirKey: 'inbound', orig: '運頭塘', dest: '黃泥頭' }
+];
+const MPLUS_STOP = '0CC0B21EFF42EE19';
+const MPLUS_ROUTES = ['213E', '215P', '215X', '261B', '281A', 'W4'];
+
+let allRoutes = [];
+let pendingDir = 'inbound';
+let bookmarks = [];
+let refreshInterval = null;
+let activeTab = 'hsuhk';
+let searchHighlightIdx = -1;
+
+const $ = s => document.querySelector(s);
+const $$ = s => document.querySelectorAll(s);
+
+async function fetchJSON(url) {
+  const r = await fetch(url);
+  if (!r.ok) throw new Error(`HTTP ${r.status}`);
+  const j = await r.json();
+  return j.data || j;
+}
+
+function loadBookmarks() {
+  try { bookmarks = JSON.parse(localStorage.getItem(LS_KEY)) || []; } catch(e) { bookmarks = []; }
+}
+
+function saveBookmarks() {
+  localStorage.setItem(LS_KEY, JSON.stringify(bookmarks));
+}
+
+function hasBookmark(route, dir) {
+  return bookmarks.some(b => b.route === route && b.dir === dir);
+}
+
+function getMatch(route, dir) {
+  const boundCode = dir === 'outbound' ? 'O' : 'I';
+  return allRoutes.filter(r => r.route === route).find(r => r.bound === boundCode);
+}
+
+async function fetchRouteStops(route, dir) {
+  return await fetchJSON(`${API}/route-stop/${route}/${dir}/1`);
+}
+
+async function fetchAllEta(route, dir, stopIds) {
+  const dirCode = dir === 'outbound' ? 'O' : 'I';
+  const results = await Promise.all(stopIds.map(id =>
+    fetchJSON(`${API}/stop-eta/${id}`).catch(() => [])
+  ));
+  return results.map(etas =>
+    etas.filter(e => e.route === route && e.dir === dirCode)
+  );
+}
+
+async function fetchStopDetails(stopIds) {
+  const results = await Promise.all(stopIds.map(id =>
+    fetchJSON(`${API}/stop/${id}`).catch(() => ({stop: id, name_tc: id, name_en: ''}))
+  ));
+  const map = {};
+  results.forEach(s => { map[s.stop] = s; });
+  return map;
+}
+
+function renderStopRow(s, detail, etas, dir) {
+  const eta = etas.length > 0 ? etas[0] : null;
+  const div = document.createElement('div');
+  div.className = 'stop';
+
+  const seq = document.createElement('span');
+  seq.className = 's-seq';
+  seq.textContent = s.seq;
+
+  const name = document.createElement('span');
+  name.className = 's-name';
+  name.textContent = detail.name_tc || detail.name_en || s.stop;
+
+  const etaDiv = document.createElement('span');
+  etaDiv.className = 's-eta';
+
+  if (eta && eta.eta) {
+    const diffMin = Math.max(0, Math.round((new Date(eta.eta) - new Date()) / 60000));
+    const t = document.createElement('span');
+    t.className = 't';
+    let cls, label;
+    if (diffMin <= 1) { cls = 'arriving'; label = '即將到達'; div.classList.add('arriving'); }
+    else if (diffMin <= 5) { cls = 'due'; label = diffMin + '分'; div.classList.add('due'); }
+    else { cls = 'later'; label = diffMin + '分'; div.classList.add('later'); }
+    t.className = 't ' + cls;
+    t.textContent = label;
+    etaDiv.appendChild(t);
+    div.classList.add('has-eta');
+    if (diffMin <= 1) {
+      const badge = document.createElement('span');
+      badge.className = 'badge arriving';
+      badge.textContent = '到';
+      etaDiv.appendChild(badge);
+    }
+  } else {
+    const t = document.createElement('span');
+    t.className = 't no-eta';
+    t.textContent = '—';
+    etaDiv.appendChild(t);
+  }
+
+  div.appendChild(seq);
+  div.appendChild(name);
+  div.appendChild(etaDiv);
+  return div;
+}
+
+async function refreshBookmark(b) {
+  const match = getMatch(b.route, b.dir);
+  if (!match) return;
+  try {
+    const stopList = await fetchRouteStops(b.route, b.dir);
+    const stopIds = stopList.map(s => s.stop);
+    const [stopMap, allEta] = await Promise.all([
+      fetchStopDetails(stopIds),
+      fetchAllEta(b.route, b.dir, stopIds)
+    ]);
+    b._stopList = stopList;
+    b._stopMap = stopMap;
+    b._allEta = allEta;
+    b._updated = Date.now();
+    b._error = null;
+  } catch (e) {
+    b._error = e.message;
+    b._updated = Date.now();
+  }
+}
+
+async function refreshAllBookmarks() {
+  if (!bookmarks.length) return;
+  $('#globalLoading').style.display = 'block';
+  await Promise.all(bookmarks.map(refreshBookmark));
+  $('#globalLoading').style.display = 'none';
+  renderCards();
+  $('#lastUpdatedBar').style.display = 'block';
+  $('#batchUpdateTime').textContent = new Date().toLocaleTimeString('zh-HK');
+}
+
+function renderCards() {
+  const grid = $('#grid');
+  grid.innerHTML = '';
+  bookmarks.forEach(b => {
+    const match = getMatch(b.route, b.dir);
+    if (!match) return;
+    const card = document.createElement('div');
+    card.className = 'card';
+    const head = document.createElement('div');
+    head.className = 'card-head';
+    const rnum = document.createElement('span');
+    rnum.className = 'rnum';
+    rnum.textContent = b.route;
+    const rdir = document.createElement('span');
+    rdir.className = 'rdir';
+    rdir.textContent = b.dir === 'outbound' ? '去程' : '回程';
+    const meta = document.createElement('div');
+    meta.className = 'rmeta';
+    const updated = document.createElement('span');
+    updated.className = 'updated';
+    updated.textContent = b._updated ? formatTime(b._updated) : '—';
+    const del = document.createElement('button');
+    del.className = 'del-btn';
+    del.textContent = '✕';
+    del.title = '移除此路線';
+    del.addEventListener('click', () => removeBookmark(b.route, b.dir));
+    meta.appendChild(updated);
+    meta.appendChild(del);
+    head.appendChild(rnum);
+    head.appendChild(rdir);
+    head.appendChild(meta);
+    const path = document.createElement('div');
+    path.className = 'card-path';
+    path.innerHTML = `<span>${match.orig_tc || match.orig_en}</span><span class="arrow">→</span><span>${match.dest_tc || match.dest_en}</span>`;
+    const stops = document.createElement('div');
+    stops.className = 'card-stops';
+    if (b._error) {
+      const err = document.createElement('div');
+      err.style.cssText = 'padding:20px;text-align:center;color:#dc2626;font-size:13px';
+      err.textContent = '⚠ ' + b._error;
+      stops.appendChild(err);
+    } else if (b._stopList) {
+      b._stopList.forEach((s, i) => {
+        const detail = (b._stopMap || {})[s.stop] || {};
+        const etas = (b._allEta || [])[i] || [];
+        stops.appendChild(renderStopRow(s, detail, etas, b.dir));
+      });
+    } else {
+      const loading = document.createElement('div');
+      loading.style.cssText = 'padding:20px;text-align:center;color:#999;font-size:13px';
+      loading.textContent = '載入中...';
+      stops.appendChild(loading);
+    }
+    card.appendChild(head);
+    card.appendChild(path);
+    card.appendChild(stops);
+    grid.appendChild(card);
+  });
+  $('#emptyState').style.display = bookmarks.length ? 'none' : 'block';
+}
+
+function formatTime(ts) {
+  const d = new Date(ts);
+  return d.toLocaleTimeString('zh-HK', {hour:'2-digit', minute:'2-digit', second:'2-digit'});
+}
+
+function addBookmark(route, dir) {
+  if (!route) return;
+  const match = getMatch(route, dir);
+  if (!match) { showToast('此路線無 ' + (dir === 'outbound' ? '去程' : '回程') + ' 資料'); return; }
+  if (hasBookmark(route, dir)) { showToast('已存在於面板'); return; }
+  bookmarks.push({ route, dir });
+  saveBookmarks();
+  refreshBookmark(bookmarks[bookmarks.length - 1]).then(() => { renderCards(); });
+  startAutoRefresh();
+  closeDropdown();
+}
+
+function removeBookmark(route, dir) {
+  bookmarks = bookmarks.filter(b => !(b.route === route && b.dir === dir));
+  saveBookmarks();
+  renderCards();
+  if (!bookmarks.length) stopAutoRefresh();
+}
+
+function startAutoRefresh() {
+  stopAutoRefresh();
+  if (!$('#autoRefresh').checked) return;
+  if (activeTab === 'bookmarks' && bookmarks.length) {
+    refreshInterval = setInterval(refreshAllBookmarks, 10000);
+  } else if (activeTab === 'hsuhk') {
+    refreshInterval = setInterval(refreshHsuhkDashboard, 10000);
+  } else if (activeTab === 'mplus') {
+    refreshInterval = setInterval(refreshMplusDashboard, 10000);
+  }
+}
+
+function stopAutoRefresh() {
+  if (refreshInterval) { clearInterval(refreshInterval); refreshInterval = null; }
+}
+
+let toastTimer = null;
+function showToast(msg) {
+  let t = $('#toast');
+  if (!t) {
+    t = document.createElement('div');
+    t.id = 'toast';
+    t.style.cssText = 'position:fixed;bottom:24px;left:50%;transform:translateX(-50%);-webkit-transform:translateX(-50%);background:#1a1a2e;color:#fff;padding:10px 24px;border-radius:10px;font-size:14px;z-index:999;box-shadow:0 4px 16px rgba(0,0,0,.2);transition:opacity .3s;opacity:0';
+    document.body.appendChild(t);
+  }
+  t.textContent = msg;
+  t.style.opacity = '1';
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => { t.style.opacity = '0'; }, 2500);
+}
+
+function formatDiff(dateStr) {
+  if (!dateStr) return null;
+  const diff = Math.max(0, Math.round((new Date(dateStr) - new Date()) / 60000));
+  return diff;
+}
+
+function diffLabel(diff) {
+  if (diff <= 1) return '即將到達';
+  return diff + ' 分鐘';
+}
+
+function diffClass(diff) {
+  if (diff <= 1) return 'arriving';
+  if (diff <= 5) return 'due';
+  return 'later';
+}
+
+let hsuhkGmbRouteNames = {};
+
+async function fetchGmbRouteInfo() {
+  const codes = ['808', '806A', '806X'];
+  for (const code of codes) {
+    try {
+      const r = await fetchJSON(`${GMB_API}/route/NT/${code}`);
+      const route = Array.isArray(r) ? r[0] : r;
+      if (route && route.directions) {
+        route.directions.forEach(d => {
+          const key = code + '-' + d.route_seq;
+          hsuhkGmbRouteNames[key] = { orig: d.orig_tc, dest: d.dest_tc };
+        });
+      }
+    } catch (e) {}
+  }
+}
+
+async function fetchHsuhkGmbEta() {
+  const results = {};
+  HSUHK_GMB_ROUTES.forEach(g => {
+    if (!results[g.route]) results[g.route] = { route: g.route, dirs: {} };
+    if (!results[g.route].dirs[g.dirKey]) {
+      results[g.route].dirs[g.dirKey] = { dir: g.dirKey, etas: [], dest_tc: g.dest, orig_tc: g.orig, gmb: true };
+    }
+  });
+  try {
+    const fetchStop = async (stopId) => {
+      const url = `${GMB_API}/eta/stop/${stopId}`;
+      try {
+        const j = await (await fetch(url)).json();
+        return j.data || j;
+      } catch(e) { return []; }
+    };
+    const [dataA, dataB] = await Promise.all([
+      fetchStop(HSUHK_GMB_STOPS[0]),
+      fetchStop(HSUHK_GMB_STOPS[1])
+    ]);
+    const allEntries = [...dataA, ...dataB];
+    HSUHK_GMB_ROUTES.forEach(g => {
+      const entry = allEntries.find(e => e.route_id === g.route_id && e.route_seq === g.route_seq && e.stop_seq === g.stop_seq);
+      if (entry && entry.enabled) {
+        (entry.eta || []).forEach(e => {
+          if (e.diff != null) results[g.route].dirs[g.dirKey].etas.push({ diff: e.diff });
+        });
+      }
+    });
+  } catch(e) {}
+  return Object.values(results);
+}
+
+let hsuhkStopName = '';
+
+async function refreshHsuhkDashboard() {
+  try {
+    if (!hsuhkStopName) {
+      const d = await fetchJSON(`${API}/stop/${HSUHK_STOPS[0]}`).catch(() => ({}));
+      hsuhkStopName = d.name_tc || '香港恒生大學';
+    }
+
+    const [etasA, etasB] = await Promise.all([
+      fetchJSON(`${API}/stop-eta/${HSUHK_STOPS[0]}`).catch(() => []),
+      fetchJSON(`${API}/stop-eta/${HSUHK_STOPS[1]}`).catch(() => [])
+    ]);
+    const combined = [...etasA, ...etasB];
+
+    const routeMap = {};
+    combined.forEach(e => {
+      if (!e.route || !e.eta) return;
+      const diff = Math.max(0, Math.round((new Date(e.eta) - new Date()) / 60000));
+      const dir = e.dir === 'O' ? 'outbound' : 'inbound';
+      if (!routeMap[e.route]) routeMap[e.route] = { route: e.route, dirs: {} };
+      if (!routeMap[e.route].dirs[dir]) {
+        routeMap[e.route].dirs[dir] = { dir, seq: e.seq, dest_tc: e.dest_tc, dest_en: e.dest_en, etas: [] };
+      } else if (parseInt(e.seq) < parseInt(routeMap[e.route].dirs[dir].seq)) {
+        routeMap[e.route].dirs[dir].seq = e.seq;
+      }
+      routeMap[e.route].dirs[dir].etas.push({ diff, eta: e.eta, rmk_tc: e.rmk_tc });
+    });
+
+    const gmbRoutes = await fetchHsuhkGmbEta();
+
+    const merged = Object.values(routeMap);
+    gmbRoutes.forEach(g => {
+      const existing = merged.find(m => m.route === g.route);
+      if (existing) {
+        Object.keys(g.dirs).forEach(dk => {
+          if (!existing.dirs[dk]) existing.dirs[dk] = g.dirs[dk];
+        });
+      } else {
+        merged.push(g);
+      }
+    });
+
+    const sorted = merged.sort((a, b) => {
+      const na = parseInt(a.route), nb = parseInt(b.route);
+      if (!isNaN(na) && !isNaN(nb)) return na - nb;
+      return a.route.localeCompare(b.route, undefined, {numeric: true});
+    });
+
+    renderHsuhkCards(sorted);
+    $('#dashCount').textContent = sorted.length + ' 條路線';
+    $('#dashUpdated').textContent = '更新於 ' + new Date().toLocaleTimeString('zh-HK');
+    $('#dashUpdatedBar').style.display = 'block';
+    $('#dashUpdateTime').textContent = new Date().toLocaleTimeString('zh-HK');
+  } catch (e) {
+    console.error('HSUHK dash error:', e);
+  }
+}
+
+function renderHsuhkCards(routes) {
+  const grid = $('#dashGrid');
+  grid.innerHTML = '';
+
+  if (!routes.length) {
+    grid.innerHTML = '<div style="text-align:center;padding:40px;color:#999">暫無到站數據</div>';
+    return;
+  }
+
+  routes.forEach(r => {
+    const allEtas = [];
+    Object.values(r.dirs).forEach(d => d.etas.forEach(e => allEtas.push(e)));
+    const bestDiff = allEtas.length ? Math.min(...allEtas.map(e => e.diff)) : 999;
+    let cls = 'later';
+    if (bestDiff <= 1) cls = 'arriving';
+    else if (bestDiff <= 5) cls = 'due';
+
+    const isGmb = Object.values(r.dirs).some(d => d.gmb);
+    const card = document.createElement('div');
+    card.className = 'dash-card ' + cls;
+
+    const bar = document.createElement('div');
+    bar.className = 'd-route-bar';
+    bar.innerHTML = `<span class="d-route">${r.route}</span>${isGmb ? '<span style="font-size:10px;background:rgba(255,255,255,.08);color:#aaa;padding:2px 8px;border-radius:8px;margin-left:6px;font-weight:600">綠Van</span>' : ''}`;
+    card.appendChild(bar);
+
+    ['inbound', 'outbound'].forEach(dir => {
+      const d = r.dirs[dir];
+      if (!d) return;
+      const section = document.createElement('div');
+      section.className = 'd-dir-section';
+
+      const head = document.createElement('div');
+      head.className = 'd-dir-head';
+      const dirLabel = dir === 'outbound' ? '去程' : '回程';
+      let destLabel = '';
+      if (d.gmb) {
+        destLabel = d.dest_tc || d.orig_tc || '';
+      } else {
+        destLabel = d.dest_tc || d.dest_en || '';
+      }
+      head.innerHTML = `<span class="d-dir-label">${dirLabel}</span><span class="d-dest">→ ${destLabel}</span>`;
+      section.appendChild(head);
+
+      const stopInfo = document.createElement('div');
+      stopInfo.className = 'd-stop-info';
+      if (d.gmb) {
+        stopInfo.innerHTML = `<span class="stop-name">廣善街, 近香港恒生大學</span>`;
+      } else {
+        stopInfo.innerHTML = `<span class="stop-seq">#${d.seq}</span><span class="stop-name">${hsuhkStopName}</span>`;
+      }
+      section.appendChild(stopInfo);
+
+      const etasDiv = document.createElement('div');
+      etasDiv.className = 'd-etas';
+
+      d.etas.sort((a, b) => a.diff - b.diff).slice(0, 3).forEach(e => {
+        const item = document.createElement('div');
+        item.className = 'd-eta-item';
+        const t = document.createElement('span');
+        t.className = 'd-time ' + diffClass(e.diff);
+        t.textContent = e.diff <= 1 ? '即將到達' : e.diff + '分';
+        item.appendChild(t);
+        etasDiv.appendChild(item);
+      });
+
+      if (!d.etas.length) {
+        const no = document.createElement('div');
+        no.className = 'd-no-eta';
+        no.textContent = '暫無班次';
+        etasDiv.appendChild(no);
+      }
+
+      section.appendChild(etasDiv);
+
+      if (d.etas[0] && d.etas[0].rmk_tc && d.etas[0].rmk_tc !== '原定班次') {
+        const rmk = document.createElement('div');
+        rmk.className = 'd-remark';
+        rmk.textContent = d.etas[0].rmk_tc;
+        section.appendChild(rmk);
+      }
+
+      card.appendChild(section);
+    });
+
+    grid.appendChild(card);
+  });
+}
+
+let mplusStopName = '';
+
+async function refreshMplusDashboard() {
+  try {
+    if (!mplusStopName) {
+      const d = await fetchJSON(`${API}/stop/${MPLUS_STOP}`).catch(() => ({}));
+      mplusStopName = d.name_tc || '柯士甸道西';
+    }
+
+    const routeMap = {};
+    MPLUS_ROUTES.forEach(r => {
+      routeMap[r] = { route: r, dirs: {} };
+    });
+
+    const etas = await fetchJSON(`${API}/stop-eta/${MPLUS_STOP}`).catch(() => []);
+    etas.forEach(e => {
+      if (!e.route || !routeMap[e.route] || !e.eta) return;
+      const diff = Math.max(0, Math.round((new Date(e.eta) - new Date()) / 60000));
+      const dir = e.dir === 'O' ? 'outbound' : 'inbound';
+      if (!routeMap[e.route].dirs[dir]) {
+        routeMap[e.route].dirs[dir] = { dir, seq: e.seq, dest_tc: e.dest_tc, dest_en: e.dest_en, etas: [] };
+      } else if (parseInt(e.seq) < parseInt(routeMap[e.route].dirs[dir].seq)) {
+        routeMap[e.route].dirs[dir].seq = e.seq;
+      }
+      routeMap[e.route].dirs[dir].etas.push({ diff, eta: e.eta, rmk_tc: e.rmk_tc });
+    });
+
+    const sorted = MPLUS_ROUTES.map(r => routeMap[r]);
+
+    renderMplusCards(sorted);
+    $('#mplusCount').textContent = sorted.length + ' 條路線';
+    $('#mplusUpdated').textContent = '更新於 ' + new Date().toLocaleTimeString('zh-HK');
+    $('#mplusUpdatedBar').style.display = 'block';
+    $('#mplusUpdateTime').textContent = new Date().toLocaleTimeString('zh-HK');
+  } catch (e) {
+    console.error('M+ dash error:', e);
+  }
+}
+
+function renderMplusCards(routes) {
+  const grid = $('#mplusGrid');
+  grid.innerHTML = '';
+
+  if (!routes.length) {
+    grid.innerHTML = '<div style="text-align:center;padding:40px;color:#999">暫無到站數據</div>';
+    return;
+  }
+
+  routes.forEach(r => {
+    const allEtas = [];
+    Object.values(r.dirs).forEach(d => d.etas.forEach(e => allEtas.push(e)));
+    const bestDiff = allEtas.length ? Math.min(...allEtas.map(e => e.diff)) : 999;
+    let cls = 'later';
+    if (bestDiff <= 1) cls = 'arriving';
+    else if (bestDiff <= 5) cls = 'due';
+
+    const card = document.createElement('div');
+    card.className = 'dash-card ' + cls;
+
+    const bar = document.createElement('div');
+    bar.className = 'd-route-bar';
+    bar.innerHTML = `<span class="d-route">${r.route}</span>`;
+    card.appendChild(bar);
+
+    ['inbound', 'outbound'].forEach(dir => {
+      const d = r.dirs[dir];
+      if (!d) return;
+      const section = document.createElement('div');
+      section.className = 'd-dir-section';
+
+      const head = document.createElement('div');
+      head.className = 'd-dir-head';
+      const dirLabel = dir === 'outbound' ? '去程' : '回程';
+      head.innerHTML = `<span class="d-dir-label">${dirLabel}</span><span class="d-dest">→ ${d.dest_tc || d.dest_en || ''}</span>`;
+      section.appendChild(head);
+
+      const stopInfo = document.createElement('div');
+      stopInfo.className = 'd-stop-info';
+      stopInfo.innerHTML = `<span class="stop-seq">#${d.seq}</span><span class="stop-name">${mplusStopName}</span>`;
+      section.appendChild(stopInfo);
+
+      const etasDiv = document.createElement('div');
+      etasDiv.className = 'd-etas';
+
+      d.etas.sort((a, b) => a.diff - b.diff).slice(0, 3).forEach(e => {
+        const item = document.createElement('div');
+        item.className = 'd-eta-item';
+        const t = document.createElement('span');
+        t.className = 'd-time ' + diffClass(e.diff);
+        t.textContent = e.diff <= 1 ? '即將到達' : e.diff + '分';
+        item.appendChild(t);
+        etasDiv.appendChild(item);
+      });
+
+      if (!d.etas.length) {
+        const no = document.createElement('div');
+        no.className = 'd-no-eta';
+        no.textContent = '暫無班次';
+        etasDiv.appendChild(no);
+      }
+
+      section.appendChild(etasDiv);
+
+      if (d.etas[0] && d.etas[0].rmk_tc && d.etas[0].rmk_tc !== '原定班次') {
+        const rmk = document.createElement('div');
+        rmk.className = 'd-remark';
+        rmk.textContent = d.etas[0].rmk_tc;
+        section.appendChild(rmk);
+      }
+
+      card.appendChild(section);
+    });
+
+    if (!Object.keys(r.dirs).length) {
+      const msg = document.createElement('div');
+      msg.style.cssText = 'padding:14px;text-align:center;color:#999;font-size:13px';
+      msg.textContent = '目前沒有服務';
+      card.appendChild(msg);
+    }
+
+    grid.appendChild(card);
+  });
+}
+
+function buildSearchItems(query) {
+  const q = query.toUpperCase().trim();
+  if (!q) return [];
+  const results = [];
+  const seen = {};
+  allRoutes.forEach(r => {
+    const key = r.route + r.bound;
+    if (seen[key]) return;
+    seen[key] = true;
+    if (r.route.toUpperCase().startsWith(q) || r.route.toUpperCase().includes(q)) {
+      results.push({
+        route: r.route,
+        bound: r.bound,
+        dir: r.bound === 'O' ? 'outbound' : 'inbound',
+        orig: r.orig_tc || r.orig_en || '',
+        dest: r.dest_tc || r.dest_en || ''
+      });
+    }
+  });
+  results.sort((a, b) => {
+    const aP = a.route.toUpperCase().startsWith(q) ? 0 : 1;
+    const bP = b.route.toUpperCase().startsWith(q) ? 0 : 1;
+    if (aP !== bP) return aP - bP;
+    const na = parseInt(a.route), nb = parseInt(b.route);
+    if (!isNaN(na) && !isNaN(nb)) return na - nb;
+    return a.route.localeCompare(b.route, undefined, {numeric: true});
+  });
+  return results.slice(0, 20);
+}
+
+function openDropdown() {
+  const dd = $('#searchDropdown');
+  dd.classList.add('open');
+}
+
+function closeDropdown() {
+  const dd = $('#searchDropdown');
+  dd.classList.remove('open');
+  searchHighlightIdx = -1;
+}
+
+function renderDropdown(query) {
+  const dd = $('#searchDropdown');
+  const items = buildSearchItems(query);
+
+  if (!items.length) {
+    dd.innerHTML = '<div class="sd-empty">沒有相符路線</div>';
+    openDropdown();
+    searchHighlightIdx = -1;
+    return;
+  }
+
+  dd.innerHTML = items.map((item, i) => {
+    const dirLabel = item.dir === 'outbound' ? '去程' : '回程';
+    const dest = item.dest || item.orig;
+    return `<div class="sd-item" data-route="${item.route}" data-dir="${item.dir}" data-index="${i}">
+      <span class="sd-route">${item.route}</span>
+      <span class="sd-dest">${item.orig} → ${item.dest}</span>
+      <span class="sd-dir">${dirLabel}</span>
+    </div>`;
+  }).join('');
+
+  searchHighlightIdx = -1;
+  openDropdown();
+
+  dd.querySelectorAll('.sd-item').forEach(el => {
+    el.addEventListener('click', () => {
+      const route = el.dataset.route;
+      const dir = el.dataset.dir;
+      $(`#dir${dir === 'outbound' ? 'Outbound' : 'Inbound'}`).click();
+      $('#routeInput').value = route;
+      addBookmark(route, dir);
+    });
+    el.addEventListener('mouseenter', () => {
+      dd.querySelectorAll('.sd-item').forEach(e => e.classList.remove('highlighted'));
+      el.classList.add('highlighted');
+    });
+  });
+}
+
+$('#routeInput').addEventListener('input', function() {
+  const val = this.value.toUpperCase();
+  if (val) {
+    renderDropdown(val);
+  } else {
+    closeDropdown();
+  }
+});
+
+$('#routeInput').addEventListener('focus', function() {
+  if (this.value.trim()) {
+    renderDropdown(this.value);
+  }
+});
+
+$('#routeInput').addEventListener('blur', function() {
+  setTimeout(closeDropdown, 200);
+});
+
+$('#routeInput').addEventListener('keydown', function(e) {
+  const dd = $('#searchDropdown');
+  const items = dd.querySelectorAll('.sd-item');
+
+  if (e.key === 'ArrowDown') {
+    e.preventDefault();
+    if (!items.length) return;
+    searchHighlightIdx = Math.min(searchHighlightIdx + 1, items.length - 1);
+    items.forEach((el, i) => el.classList.toggle('highlighted', i === searchHighlightIdx));
+    if (items[searchHighlightIdx]) items[searchHighlightIdx].scrollIntoView({ block: 'nearest' });
+  } else if (e.key === 'ArrowUp') {
+    e.preventDefault();
+    if (!items.length) return;
+    searchHighlightIdx = Math.max(searchHighlightIdx - 1, 0);
+    items.forEach((el, i) => el.classList.toggle('highlighted', i === searchHighlightIdx));
+    if (items[searchHighlightIdx]) items[searchHighlightIdx].scrollIntoView({ block: 'nearest' });
+  } else if (e.key === 'Enter') {
+    e.preventDefault();
+    if (searchHighlightIdx >= 0 && items[searchHighlightIdx]) {
+      items[searchHighlightIdx].click();
+    } else {
+      const val = this.value.trim().toUpperCase();
+      if (val) addBookmark(val, pendingDir);
+    }
+  } else if (e.key === 'Escape') {
+    closeDropdown();
+  }
+});
+
+document.addEventListener('click', function(e) {
+  const dd = $('#searchDropdown');
+  const input = $('#routeInput');
+  if (!input.contains(e.target) && !dd.contains(e.target)) {
+    closeDropdown();
+  }
+});
+
+$$('.tab').forEach(tab => {
+  tab.addEventListener('click', () => {
+    $$('.tab').forEach(t => t.classList.remove('active'));
+    tab.classList.add('active');
+    activeTab = tab.dataset.tab;
+    $$('.panel').forEach(p => p.classList.remove('active'));
+    $('#panel-' + activeTab).classList.add('active');
+    stopAutoRefresh();
+    if (activeTab === 'hsuhk') {
+      refreshHsuhkDashboard();
+    } else if (activeTab === 'mplus') {
+      refreshMplusDashboard();
+    } else if (activeTab === 'bookmarks' && bookmarks.length) {
+      refreshAllBookmarks();
+    }
+    startAutoRefresh();
+  });
+});
+
+$('#addBtn').addEventListener('click', () => {
+  const val = $('#routeInput').value.trim().toUpperCase();
+  if (val) addBookmark(val, pendingDir);
+});
+
+$('#dirInbound').addEventListener('click', () => {
+  pendingDir = 'inbound';
+  $$('.dir-btn').forEach(b => b.classList.toggle('active', b.dataset.dir === 'inbound'));
+});
+$('#dirOutbound').addEventListener('click', () => {
+  pendingDir = 'outbound';
+  $$('.dir-btn').forEach(b => b.classList.toggle('active', b.dataset.dir === 'outbound'));
+});
+
+$('#autoRefresh').addEventListener('change', () => {
+  if ($('#autoRefresh').checked) {
+    startAutoRefresh();
+    if (activeTab === 'bookmarks' && bookmarks.length) refreshAllBookmarks();
+    else if (activeTab === 'hsuhk') refreshHsuhkDashboard();
+    else if (activeTab === 'mplus') refreshMplusDashboard();
+  } else {
+    stopAutoRefresh();
+  }
+});
+
+loadBookmarks();
+
+(async function init() {
+  try {
+    const data = await fetchJSON(`${API}/route/`);
+    allRoutes = data;
+    $('#routeInput').disabled = false;
+    $('#addBtn').disabled = false;
+    renderCards();
+  } catch (e) {
+    showToast('無法載入路線列表: ' + e.message);
+  }
+  await fetchGmbRouteInfo();
+  if (bookmarks.length) {
+    refreshAllBookmarks();
+    startAutoRefresh();
+  }
+  refreshHsuhkDashboard();
+})();
+</script>
+</body>
+</html>
