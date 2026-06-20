@@ -147,6 +147,7 @@
     <button class="tab active" data-tab="hsuhk">🏫 恒大概覽</button>
     <button class="tab" data-tab="mplus">🎨 M+ 西九</button>
     <button class="tab" data-tab="st884">🚌 廣源 (ST884)</button>
+    <button class="tab" data-tab="st894">🚌 黃泥頭 (ST894)</button>
     <button class="tab" data-tab="bookmarks">📌 我的路線</button>
   </div>
 </div>
@@ -225,6 +226,20 @@
   </div>
 </div>
 
+<div id="panel-st894" class="panel">
+  <div class="hsuhk-dash">
+    <div class="hsuhk-header">
+      <div><span class="stop-name">🚌 黃泥頭巴士總站 <small>WONG NAI TAU BUS TERMINUS (ST894)</small></span></div>
+      <span class="dash-count" id="st894Count">—</span>
+      <span class="dash-updated" id="st894Updated"></span>
+    </div>
+    <div class="dash-grid" id="st894Grid"></div>
+  </div>
+  <div class="last-updated-bar" id="st894UpdatedBar" style="display:none">
+    最後更新: <span id="st894UpdateTime"></span>
+  </div>
+</div>
+
 <script>
 const API = 'https://data.etabus.gov.hk/v1/transport/kmb';
 const GMB_API = 'https://data.etagmb.gov.hk';
@@ -254,6 +269,19 @@ const ST884_GMB_ROUTES = [
   { route: '804', route_id: 2010275, route_seq: 2, stop_seq: 19, gmb_stop: '20002255', dirKey: 'inbound', orig: '顯徑', dest: '廣源' },
   { route: '806A', route_id: 2001821, route_seq: 1, stop_seq: 2, gmb_stop: '20001545', dirKey: 'outbound', orig: '黃泥頭', dest: '運頭塘' },
   { route: '806A', route_id: 2001821, route_seq: 2, stop_seq: 3, gmb_stop: '20007673', dirKey: 'inbound', orig: '運頭塘', dest: '黃泥頭' },
+];
+
+const ST894_STOPS = [
+  { id: 'D75CEF6318A515DE', name: '黃泥頭巴士總站 (ST894)' },
+  { id: '9DB1F8ED716CD77E', name: '黃泥頭巴士總站 (ST893)' },
+  { id: '2CEEB19BC6404A39', name: '黃泥頭巴士總站 (ST895)' },
+  { id: 'F0852C7827CC97EB', name: '黃泥頭巴士總站 (ST890)' },
+];
+const ST894_ROUTES = ['86', 'A42', 'NA41', '83K', '83S', '83X'];
+const ST894_GMB_ROUTES = [
+  { route: '65K', route_id: 2009081, route_seq: 1, stop_seq: 1, gmb_stop: '20001544', dirKey: 'outbound', orig: '黃泥頭', dest: '火炭站 (循環線)' },
+  { route: '806A', route_id: 2001821, route_seq: 1, stop_seq: 1, gmb_stop: '20001544', dirKey: 'outbound', orig: '黃泥頭', dest: '運頭塘' },
+  { route: '806A', route_id: 2001821, route_seq: 2, stop_seq: 30, gmb_stop: '20001544', dirKey: 'inbound', orig: '運頭塘', dest: '黃泥頭' },
 ];
 
 let allRoutes = [];
@@ -487,6 +515,8 @@ function startAutoRefresh() {
     refreshInterval = setInterval(refreshMplusDashboard, 10000);
   } else if (activeTab === 'st884') {
     refreshInterval = setInterval(refreshSt884Dashboard, 10000);
+  } else if (activeTab === 'st894') {
+    refreshInterval = setInterval(refreshSt894Dashboard, 10000);
   }
 }
 
@@ -1041,6 +1071,198 @@ function renderSt884Cards(routes) {
   });
 }
 
+let st894StopNames = {};
+
+async function fetchSt894GmbEta() {
+  const results = {};
+  ST894_GMB_ROUTES.forEach(g => {
+    if (!results[g.route]) results[g.route] = { route: g.route, dirs: {} };
+    if (!results[g.route].dirs[g.dirKey]) {
+      results[g.route].dirs[g.dirKey] = { dir: g.dirKey, etas: [], dest_tc: g.dest, orig_tc: g.orig, gmb: true, seq: g.stop_seq };
+    }
+  });
+  try {
+    const fetchStop = async (stopId) => {
+      try {
+        const j = await (await fetch(`${GMB_API}/eta/stop/${stopId}`)).json();
+        return j.data || j;
+      } catch(e) { return []; }
+    };
+    const allStopIds = [...new Set(ST894_GMB_ROUTES.map(g => g.gmb_stop))];
+    const allData = await Promise.all(allStopIds.map(fetchStop));
+    const allEntries = allData.flat();
+    ST894_GMB_ROUTES.forEach(g => {
+      const entry = allEntries.find(e => e.route_id === g.route_id && e.route_seq === g.route_seq && e.stop_seq === g.stop_seq);
+      if (entry && entry.enabled) {
+        (entry.eta || []).forEach(e => {
+          if (e.diff != null) results[g.route].dirs[g.dirKey].etas.push({ diff: e.diff });
+        });
+      }
+    });
+  } catch(e) {}
+  return Object.values(results);
+}
+
+async function refreshSt894Dashboard() {
+  try {
+    for (const s of ST894_STOPS) {
+      if (!st894StopNames[s.id]) {
+        const d = await fetchJSON(`${API}/stop/${s.id}`).catch(() => ({}));
+        st894StopNames[s.id] = d.name_tc || s.name;
+      }
+    }
+
+    const routeMap = {};
+    ST894_ROUTES.forEach(r => {
+      routeMap[r] = { route: r, dirs: {} };
+    });
+
+    const allEtas = await Promise.all(ST894_STOPS.map(s =>
+      fetchJSON(`${API}/stop-eta/${s.id}`).catch(() => [])
+    ));
+
+    allEtas.forEach((etas, idx) => {
+      etas.forEach(e => {
+        if (!e.route || !routeMap[e.route] || !e.eta) return;
+        const diff = Math.max(0, Math.round((new Date(e.eta) - new Date()) / 60000));
+        const dir = e.dir === 'O' ? 'outbound' : 'inbound';
+        if (!routeMap[e.route].dirs[dir]) {
+          routeMap[e.route].dirs[dir] = { dir, seq: e.seq, dest_tc: e.dest_tc, dest_en: e.dest_en, etas: [], stopIdx: idx };
+        } else {
+          const existing = routeMap[e.route].dirs[dir];
+          if (parseInt(e.seq) < parseInt(existing.seq)) {
+            existing.seq = e.seq;
+            existing.stopIdx = idx;
+            existing.dest_tc = e.dest_tc;
+            existing.dest_en = e.dest_en;
+          }
+        }
+        routeMap[e.route].dirs[dir].etas.push({ diff, eta: e.eta, rmk_tc: e.rmk_tc, stopIdx: idx });
+      });
+    });
+
+    const gmbRoutes = await fetchSt894GmbEta();
+    gmbRoutes.forEach(g => {
+      const existing = Object.values(routeMap).find(m => m.route === g.route);
+      if (existing) {
+        Object.keys(g.dirs).forEach(dk => {
+          if (!existing.dirs[dk]) existing.dirs[dk] = g.dirs[dk];
+        });
+      } else {
+        routeMap[g.route] = g;
+      }
+    });
+
+    const sorted = ST894_ROUTES.filter(r => routeMap[r]).map(r => routeMap[r]);
+    Object.values(routeMap).filter(r => !ST894_ROUTES.includes(r.route) && r.dirs && Object.values(r.dirs).some(d => d.gmb)).forEach(r => sorted.push(r));
+
+    renderSt894Cards(sorted);
+    $('#st894Count').textContent = sorted.length + ' 條路線';
+    $('#st894Updated').textContent = '更新於 ' + new Date().toLocaleTimeString('zh-HK');
+    $('#st894UpdatedBar').style.display = 'block';
+    $('#st894UpdateTime').textContent = new Date().toLocaleTimeString('zh-HK');
+  } catch (e) {
+    console.error('ST894 dash error:', e);
+  }
+}
+
+function renderSt894Cards(routes) {
+  const grid = $('#st894Grid');
+  grid.innerHTML = '';
+
+  if (!routes.length) {
+    grid.innerHTML = '<div style="text-align:center;padding:40px;color:#999">暫無到站數據</div>';
+    return;
+  }
+
+  routes.forEach(r => {
+    const allEtas = [];
+    Object.values(r.dirs).forEach(d => d.etas.forEach(e => allEtas.push(e)));
+    const bestDiff = allEtas.length ? Math.min(...allEtas.map(e => e.diff)) : 999;
+    let cls = 'later';
+    if (bestDiff <= 1) cls = 'arriving';
+    else if (bestDiff <= 5) cls = 'due';
+
+    const isGmb = Object.values(r.dirs).some(d => d.gmb);
+    const card = document.createElement('div');
+    card.className = 'dash-card ' + cls;
+
+    const bar = document.createElement('div');
+    bar.className = 'd-route-bar';
+    bar.innerHTML = `<span class="d-route">${r.route}</span>${isGmb ? '<span style="font-size:10px;background:rgba(255,255,255,.08);color:#aaa;padding:2px 8px;border-radius:8px;margin-left:6px;font-weight:600">綠Van</span>' : ''}`;
+    card.appendChild(bar);
+
+    ['inbound', 'outbound'].forEach(dir => {
+      const d = r.dirs[dir];
+      if (!d) return;
+      const section = document.createElement('div');
+      section.className = 'd-dir-section';
+
+      const head = document.createElement('div');
+      head.className = 'd-dir-head';
+      const dirLabel = dir === 'outbound' ? '去程' : '回程';
+      let destLabel = '';
+      if (d.gmb) {
+        destLabel = d.dest_tc || d.orig_tc || '';
+      } else {
+        destLabel = d.dest_tc || d.dest_en || '';
+      }
+      head.innerHTML = `<span class="d-dir-label">${dirLabel}</span><span class="d-dest">→ ${destLabel}</span>`;
+      section.appendChild(head);
+
+      const stopInfo = document.createElement('div');
+      stopInfo.className = 'd-stop-info';
+      const stopName = d.gmb ? '黃泥頭巴士總站' : (st894StopNames[ST894_STOPS[d.stopIdx]?.id] || ST894_STOPS[d.stopIdx]?.name || '黃泥頭');
+      if (d.gmb) {
+        stopInfo.innerHTML = `<span class="stop-name">黃泥頭巴士總站</span>`;
+      } else {
+        stopInfo.innerHTML = `<span class="stop-seq">#${d.seq}</span><span class="stop-name">${stopName}</span>`;
+      }
+      section.appendChild(stopInfo);
+
+      const etasDiv = document.createElement('div');
+      etasDiv.className = 'd-etas';
+
+      d.etas.sort((a, b) => a.diff - b.diff).slice(0, 3).forEach(e => {
+        const item = document.createElement('div');
+        item.className = 'd-eta-item';
+        const t = document.createElement('span');
+        t.className = 'd-time ' + diffClass(e.diff);
+        t.textContent = e.diff <= 1 ? '即將到達' : e.diff + '分';
+        item.appendChild(t);
+        etasDiv.appendChild(item);
+      });
+
+      if (!d.etas.length) {
+        const no = document.createElement('div');
+        no.className = 'd-no-eta';
+        no.textContent = '暫無班次';
+        etasDiv.appendChild(no);
+      }
+
+      section.appendChild(etasDiv);
+
+      if (d.etas[0] && d.etas[0].rmk_tc && d.etas[0].rmk_tc !== '原定班次') {
+        const rmk = document.createElement('div');
+        rmk.className = 'd-remark';
+        rmk.textContent = d.etas[0].rmk_tc;
+        section.appendChild(rmk);
+      }
+
+      card.appendChild(section);
+    });
+
+    if (!Object.keys(r.dirs).length) {
+      const msg = document.createElement('div');
+      msg.style.cssText = 'padding:14px;text-align:center;color:#999;font-size:13px';
+      msg.textContent = '目前沒有服務';
+      card.appendChild(msg);
+    }
+
+    grid.appendChild(card);
+  });
+}
+
 function buildSearchItems(query) {
   const q = query.toUpperCase().trim();
   if (!q) return [];
@@ -1191,6 +1413,8 @@ $$('.tab').forEach(tab => {
       refreshMplusDashboard();
     } else if (activeTab === 'st884') {
       refreshSt884Dashboard();
+    } else if (activeTab === 'st894') {
+      refreshSt894Dashboard();
     } else if (activeTab === 'bookmarks' && bookmarks.length) {
       refreshAllBookmarks();
     }
@@ -1219,6 +1443,7 @@ $('#autoRefresh').addEventListener('change', () => {
     else if (activeTab === 'hsuhk') refreshHsuhkDashboard();
     else if (activeTab === 'mplus') refreshMplusDashboard();
     else if (activeTab === 'st884') refreshSt884Dashboard();
+    else if (activeTab === 'st894') refreshSt894Dashboard();
   } else {
     stopAutoRefresh();
   }
@@ -1243,6 +1468,7 @@ loadBookmarks();
   }
   refreshHsuhkDashboard();
   refreshSt884Dashboard();
+  refreshSt894Dashboard();
 })();
 </script>
 </body>
