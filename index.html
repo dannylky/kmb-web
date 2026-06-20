@@ -146,6 +146,7 @@
   <div class="tabs">
     <button class="tab active" data-tab="hsuhk">🏫 恒大概覽</button>
     <button class="tab" data-tab="mplus">🎨 M+ 西九</button>
+    <button class="tab" data-tab="st884">🚌 廣源 (ST884)</button>
     <button class="tab" data-tab="bookmarks">📌 我的路線</button>
   </div>
 </div>
@@ -210,6 +211,20 @@
   </div>
 </div>
 
+<div id="panel-st884" class="panel">
+  <div class="hsuhk-dash">
+    <div class="hsuhk-header">
+      <div><span class="stop-name">🚌 廣源巴士總站 <small>KWONG YUEN BUS TERMINUS (ST884)</small></span></div>
+      <span class="dash-count" id="st884Count">—</span>
+      <span class="dash-updated" id="st884Updated"></span>
+    </div>
+    <div class="dash-grid" id="st884Grid"></div>
+  </div>
+  <div class="last-updated-bar" id="st884UpdatedBar" style="display:none">
+    最後更新: <span id="st884UpdateTime"></span>
+  </div>
+</div>
+
 <script>
 const API = 'https://data.etabus.gov.hk/v1/transport/kmb';
 const GMB_API = 'https://data.etagmb.gov.hk';
@@ -226,6 +241,9 @@ const HSUHK_GMB_ROUTES = [
 ];
 const MPLUS_STOP = '0CC0B21EFF42EE19';
 const MPLUS_ROUTES = ['213E', '215P', '215X', '261B', '281A', 'W4'];
+
+const ST884_STOP = 'EAA44CDBC231DB8C';
+const ST884_ROUTES = ['281A', '281E', 'N182'];
 
 let allRoutes = [];
 let pendingDir = 'inbound';
@@ -456,6 +474,8 @@ function startAutoRefresh() {
     refreshInterval = setInterval(refreshHsuhkDashboard, 10000);
   } else if (activeTab === 'mplus') {
     refreshInterval = setInterval(refreshMplusDashboard, 10000);
+  } else if (activeTab === 'st884') {
+    refreshInterval = setInterval(refreshSt884Dashboard, 10000);
   }
 }
 
@@ -818,6 +838,130 @@ function renderMplusCards(routes) {
   });
 }
 
+let st884StopName = '';
+
+async function refreshSt884Dashboard() {
+  try {
+    if (!st884StopName) {
+      const d = await fetchJSON(`${API}/stop/${ST884_STOP}`).catch(() => ({}));
+      st884StopName = d.name_tc || '廣源巴士總站';
+    }
+
+    const routeMap = {};
+    ST884_ROUTES.forEach(r => {
+      routeMap[r] = { route: r, dirs: {} };
+    });
+
+    const etas = await fetchJSON(`${API}/stop-eta/${ST884_STOP}`).catch(() => []);
+    etas.forEach(e => {
+      if (!e.route || !routeMap[e.route] || !e.eta) return;
+      const diff = Math.max(0, Math.round((new Date(e.eta) - new Date()) / 60000));
+      const dir = e.dir === 'O' ? 'outbound' : 'inbound';
+      if (!routeMap[e.route].dirs[dir]) {
+        routeMap[e.route].dirs[dir] = { dir, seq: e.seq, dest_tc: e.dest_tc, dest_en: e.dest_en, etas: [] };
+      } else if (parseInt(e.seq) < parseInt(routeMap[e.route].dirs[dir].seq)) {
+        routeMap[e.route].dirs[dir].seq = e.seq;
+      }
+      routeMap[e.route].dirs[dir].etas.push({ diff, eta: e.eta, rmk_tc: e.rmk_tc });
+    });
+
+    const sorted = ST884_ROUTES.map(r => routeMap[r]);
+
+    renderSt884Cards(sorted);
+    $('#st884Count').textContent = sorted.length + ' 條路線';
+    $('#st884Updated').textContent = '更新於 ' + new Date().toLocaleTimeString('zh-HK');
+    $('#st884UpdatedBar').style.display = 'block';
+    $('#st884UpdateTime').textContent = new Date().toLocaleTimeString('zh-HK');
+  } catch (e) {
+    console.error('ST884 dash error:', e);
+  }
+}
+
+function renderSt884Cards(routes) {
+  const grid = $('#st884Grid');
+  grid.innerHTML = '';
+
+  if (!routes.length) {
+    grid.innerHTML = '<div style="text-align:center;padding:40px;color:#999">暫無到站數據</div>';
+    return;
+  }
+
+  routes.forEach(r => {
+    const allEtas = [];
+    Object.values(r.dirs).forEach(d => d.etas.forEach(e => allEtas.push(e)));
+    const bestDiff = allEtas.length ? Math.min(...allEtas.map(e => e.diff)) : 999;
+    let cls = 'later';
+    if (bestDiff <= 1) cls = 'arriving';
+    else if (bestDiff <= 5) cls = 'due';
+
+    const card = document.createElement('div');
+    card.className = 'dash-card ' + cls;
+
+    const bar = document.createElement('div');
+    bar.className = 'd-route-bar';
+    bar.innerHTML = `<span class="d-route">${r.route}</span>`;
+    card.appendChild(bar);
+
+    ['inbound', 'outbound'].forEach(dir => {
+      const d = r.dirs[dir];
+      if (!d) return;
+      const section = document.createElement('div');
+      section.className = 'd-dir-section';
+
+      const head = document.createElement('div');
+      head.className = 'd-dir-head';
+      const dirLabel = dir === 'outbound' ? '去程' : '回程';
+      head.innerHTML = `<span class="d-dir-label">${dirLabel}</span><span class="d-dest">→ ${d.dest_tc || d.dest_en || ''}</span>`;
+      section.appendChild(head);
+
+      const stopInfo = document.createElement('div');
+      stopInfo.className = 'd-stop-info';
+      stopInfo.innerHTML = `<span class="stop-seq">#${d.seq}</span><span class="stop-name">${st884StopName}</span>`;
+      section.appendChild(stopInfo);
+
+      const etasDiv = document.createElement('div');
+      etasDiv.className = 'd-etas';
+
+      d.etas.sort((a, b) => a.diff - b.diff).slice(0, 3).forEach(e => {
+        const item = document.createElement('div');
+        item.className = 'd-eta-item';
+        const t = document.createElement('span');
+        t.className = 'd-time ' + diffClass(e.diff);
+        t.textContent = e.diff <= 1 ? '即將到達' : e.diff + '分';
+        item.appendChild(t);
+        etasDiv.appendChild(item);
+      });
+
+      if (!d.etas.length) {
+        const no = document.createElement('div');
+        no.className = 'd-no-eta';
+        no.textContent = '暫無班次';
+        etasDiv.appendChild(no);
+      }
+
+      section.appendChild(etasDiv);
+
+      if (d.etas[0] && d.etas[0].rmk_tc && d.etas[0].rmk_tc !== '原定班次') {
+        const rmk = document.createElement('div');
+        rmk.className = 'd-remark';
+        rmk.textContent = d.etas[0].rmk_tc;
+        section.appendChild(rmk);
+      }
+
+      card.appendChild(section);
+    });
+
+    if (!Object.keys(r.dirs).length) {
+      const msg = document.createElement('div');
+      msg.style.cssText = 'padding:14px;text-align:center;color:#999;font-size:13px';
+      msg.textContent = '目前沒有服務';
+      card.appendChild(msg);
+    }
+
+    grid.appendChild(card);
+  });
+}
+
 function buildSearchItems(query) {
   const q = query.toUpperCase().trim();
   if (!q) return [];
@@ -966,6 +1110,8 @@ $$('.tab').forEach(tab => {
       refreshHsuhkDashboard();
     } else if (activeTab === 'mplus') {
       refreshMplusDashboard();
+    } else if (activeTab === 'st884') {
+      refreshSt884Dashboard();
     } else if (activeTab === 'bookmarks' && bookmarks.length) {
       refreshAllBookmarks();
     }
@@ -988,11 +1134,12 @@ $('#dirOutbound').addEventListener('click', () => {
 });
 
 $('#autoRefresh').addEventListener('change', () => {
-  if ($('#autoRefresh').checked) {
+    if ($('#autoRefresh').checked) {
     startAutoRefresh();
     if (activeTab === 'bookmarks' && bookmarks.length) refreshAllBookmarks();
     else if (activeTab === 'hsuhk') refreshHsuhkDashboard();
     else if (activeTab === 'mplus') refreshMplusDashboard();
+    else if (activeTab === 'st884') refreshSt884Dashboard();
   } else {
     stopAutoRefresh();
   }
@@ -1016,6 +1163,7 @@ loadBookmarks();
     startAutoRefresh();
   }
   refreshHsuhkDashboard();
+  refreshSt884Dashboard();
 })();
 </script>
 </body>
