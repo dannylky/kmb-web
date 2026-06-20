@@ -128,14 +128,26 @@
   .dash-card .d-remark { font-size: 11px; color: #555; margin-top: 4px; font-style: italic; }
   .dash-card .d-no-eta { font-size: 12px; color: #555; }
 
-  @media (max-width: 600px) {
-    .header h1 { font-size: 17px; }
+  @media (max-width: 700px) {
+    .header { padding: 12px 12px 0; }
+    .header h1 { font-size: 16px; padding-bottom: 8px; }
     .header h1 small { display: none; }
-    .tab { padding: 10px 14px; font-size: 13px; }
+    .tabs { overflow-x: auto; -webkit-overflow-scrolling: touch; scrollbar-width: none; }
+    .tabs::-webkit-scrollbar { display: none; }
+    .tab { padding: 8px 12px; font-size: 12px; flex-shrink: 0; }
     .search-wrap { max-width: none; flex: auto; width: 100%; }
     .bookmark-grid, .dash-grid { grid-template-columns: 1fr; padding: 10px; gap: 10px; }
     .card-stops { max-height: 360px; }
+    .controls { gap: 6px; }
+    .controls button { font-size: 13px; padding: 6px 10px; }
+    .controls .dir-btn { padding: 6px 12px; }
     .controls .add-btn { flex: 1; text-align: center; }
+    .hsuhk-dash { padding: 10px; }
+    .hsuhk-header { padding: 12px 14px; gap: 8px; }
+    .hsuhk-header .stop-name { font-size: 15px; }
+    .hsuhk-header .stop-name small { font-size: 11px; display: block; margin-left: 0; margin-top: 2px; }
+    .hsuhk-header .dash-count { font-size: 11px; padding: 2px 8px; }
+    #panel-bookmarks > div:first-child { padding: 8px 12px !important; }
   }
 </style>
 </head>
