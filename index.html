@@ -52,10 +52,7 @@
     .auto-refresh-label input { width: 15px; height: 15px; cursor: pointer; }
   }
 
-  .bookmark-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(360px, 1fr)); gap: 14px; padding: 16px; max-width: 1520px; margin: 0 auto; }
-  @media (min-width: 1160px) { .bookmark-grid { grid-template-columns: repeat(2, 1fr); } }
-  @media (min-width: 1540px) { .bookmark-grid { grid-template-columns: repeat(3, 1fr); } }
-  @media (min-width: 1920px) { .bookmark-grid { grid-template-columns: repeat(4, 1fr); } }
+  .bookmark-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; padding: 16px; max-width: 1520px; margin: 0 auto; }
 
   .card { background: #1a1a2e; border-radius: 12px; box-shadow: 0 2px 8px rgba(0,0,0,.25); overflow: hidden; display: flex; flex-direction: column; border: 1px solid rgba(255,255,255,.06); }
   .card-head { display: flex; align-items: center; gap: 10px; padding: 12px 14px 8px; }
@@ -106,7 +103,7 @@
   .hsuhk-header .dash-updated { margin-left: auto; font-size: 12px; color: #555; }
   .hsuhk-header .dash-count { font-size: 13px; background: rgba(255,255,255,.06); padding: 4px 12px; border-radius: 16px; color: #888; }
 
-  .dash-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(360px, 1fr)); gap: 10px; }
+  .dash-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; }
   .dash-card { background: #1a1a2e; border: 1px solid rgba(255,255,255,.06); border-radius: 10px; box-shadow: 0 2px 6px rgba(0,0,0,.2); overflow: hidden; border-left: 4px solid rgba(255,255,255,.12); transition: box-shadow .2s; }
   .dash-card:hover { box-shadow: 0 4px 16px rgba(0,0,0,.35); }
   .dash-card.arriving { border-left-color: #16a34a; }
@@ -136,10 +133,9 @@
     .header h1 small { display: none; }
     .tab { padding: 10px 14px; font-size: 13px; }
     .search-wrap { max-width: none; flex: auto; width: 100%; }
-    .bookmark-grid { grid-template-columns: 1fr; padding: 10px; gap: 10px; }
+    .bookmark-grid, .dash-grid { grid-template-columns: 1fr; padding: 10px; gap: 10px; }
     .card-stops { max-height: 360px; }
     .controls .add-btn { flex: 1; text-align: center; }
-    .dash-grid { grid-template-columns: 1fr; }
   }
 </style>
 </head>
