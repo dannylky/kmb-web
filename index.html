@@ -242,8 +242,19 @@ const HSUHK_GMB_ROUTES = [
 const MPLUS_STOP = '0CC0B21EFF42EE19';
 const MPLUS_ROUTES = ['213E', '215P', '215X', '261B', '281A', 'W4'];
 
-const ST884_STOP = 'EAA44CDBC231DB8C';
-const ST884_ROUTES = ['281A', '281E', 'N182'];
+const ST884_STOPS = [
+  { id: 'EAA44CDBC231DB8C', name: '廣源巴士總站 (ST884)' },
+  { id: 'C7C74EE6E201E5A9', name: '廣源巴士總站 (ST883)' },
+  { id: 'C31623CD04CA37F0', name: '廣源巴士總站 (ST882)' },
+  { id: '6FCDCBEC73F3AAF5', name: '廣源巴士總站 (ST880)' },
+];
+const ST884_ROUTES = ['281A', '281E', 'N182', '82X', '82C', '85A', '49X'];
+const ST884_GMB_ROUTES = [
+  { route: '804', route_id: 2010275, route_seq: 1, stop_seq: 1, gmb_stop: '20002255', dirKey: 'outbound', orig: '廣源', dest: '顯徑' },
+  { route: '804', route_id: 2010275, route_seq: 2, stop_seq: 19, gmb_stop: '20002255', dirKey: 'inbound', orig: '顯徑', dest: '廣源' },
+  { route: '806A', route_id: 2001821, route_seq: 1, stop_seq: 2, gmb_stop: '20001545', dirKey: 'outbound', orig: '黃泥頭', dest: '運頭塘' },
+  { route: '806A', route_id: 2001821, route_seq: 2, stop_seq: 3, gmb_stop: '20007673', dirKey: 'inbound', orig: '運頭塘', dest: '黃泥頭' },
+];
 
 let allRoutes = [];
 let pendingDir = 'inbound';
@@ -838,13 +849,45 @@ function renderMplusCards(routes) {
   });
 }
 
-let st884StopName = '';
+let st884StopNames = {};
+
+async function fetchSt884GmbEta() {
+  const results = {};
+  ST884_GMB_ROUTES.forEach(g => {
+    if (!results[g.route]) results[g.route] = { route: g.route, dirs: {} };
+    if (!results[g.route].dirs[g.dirKey]) {
+      results[g.route].dirs[g.dirKey] = { dir: g.dirKey, etas: [], dest_tc: g.dest, orig_tc: g.orig, gmb: true, seq: g.stop_seq };
+    }
+  });
+  try {
+    const fetchStop = async (stopId) => {
+      try {
+        const j = await (await fetch(`${GMB_API}/eta/stop/${stopId}`)).json();
+        return j.data || j;
+      } catch(e) { return []; }
+    };
+    const allStopIds = [...new Set(ST884_GMB_ROUTES.map(g => g.gmb_stop))];
+    const allData = await Promise.all(allStopIds.map(fetchStop));
+    const allEntries = allData.flat();
+    ST884_GMB_ROUTES.forEach(g => {
+      const entry = allEntries.find(e => e.route_id === g.route_id && e.route_seq === g.route_seq && e.stop_seq === g.stop_seq);
+      if (entry && entry.enabled) {
+        (entry.eta || []).forEach(e => {
+          if (e.diff != null) results[g.route].dirs[g.dirKey].etas.push({ diff: e.diff });
+        });
+      }
+    });
+  } catch(e) {}
+  return Object.values(results);
+}
 
 async function refreshSt884Dashboard() {
   try {
-    if (!st884StopName) {
-      const d = await fetchJSON(`${API}/stop/${ST884_STOP}`).catch(() => ({}));
-      st884StopName = d.name_tc || '廣源巴士總站';
+    for (const s of ST884_STOPS) {
+      if (!st884StopNames[s.id]) {
+        const d = await fetchJSON(`${API}/stop/${s.id}`).catch(() => ({}));
+        st884StopNames[s.id] = d.name_tc || s.name;
+      }
     }
 
     const routeMap = {};
@@ -852,20 +895,44 @@ async function refreshSt884Dashboard() {
       routeMap[r] = { route: r, dirs: {} };
     });
 
-    const etas = await fetchJSON(`${API}/stop-eta/${ST884_STOP}`).catch(() => []);
-    etas.forEach(e => {
-      if (!e.route || !routeMap[e.route] || !e.eta) return;
-      const diff = Math.max(0, Math.round((new Date(e.eta) - new Date()) / 60000));
-      const dir = e.dir === 'O' ? 'outbound' : 'inbound';
-      if (!routeMap[e.route].dirs[dir]) {
-        routeMap[e.route].dirs[dir] = { dir, seq: e.seq, dest_tc: e.dest_tc, dest_en: e.dest_en, etas: [] };
-      } else if (parseInt(e.seq) < parseInt(routeMap[e.route].dirs[dir].seq)) {
-        routeMap[e.route].dirs[dir].seq = e.seq;
-      }
-      routeMap[e.route].dirs[dir].etas.push({ diff, eta: e.eta, rmk_tc: e.rmk_tc });
+    const allEtas = await Promise.all(ST884_STOPS.map(s =>
+      fetchJSON(`${API}/stop-eta/${s.id}`).catch(() => [])
+    ));
+
+    allEtas.forEach((etas, idx) => {
+      etas.forEach(e => {
+        if (!e.route || !routeMap[e.route] || !e.eta) return;
+        const diff = Math.max(0, Math.round((new Date(e.eta) - new Date()) / 60000));
+        const dir = e.dir === 'O' ? 'outbound' : 'inbound';
+        if (!routeMap[e.route].dirs[dir]) {
+          routeMap[e.route].dirs[dir] = { dir, seq: e.seq, dest_tc: e.dest_tc, dest_en: e.dest_en, etas: [], stopIdx: idx };
+        } else {
+          const existing = routeMap[e.route].dirs[dir];
+          if (parseInt(e.seq) < parseInt(existing.seq)) {
+            existing.seq = e.seq;
+            existing.stopIdx = idx;
+            existing.dest_tc = e.dest_tc;
+            existing.dest_en = e.dest_en;
+          }
+        }
+        routeMap[e.route].dirs[dir].etas.push({ diff, eta: e.eta, rmk_tc: e.rmk_tc, stopIdx: idx });
+      });
     });
 
-    const sorted = ST884_ROUTES.map(r => routeMap[r]);
+    const gmbRoutes = await fetchSt884GmbEta();
+    gmbRoutes.forEach(g => {
+      const existing = Object.values(routeMap).find(m => m.route === g.route);
+      if (existing) {
+        Object.keys(g.dirs).forEach(dk => {
+          if (!existing.dirs[dk]) existing.dirs[dk] = g.dirs[dk];
+        });
+      } else {
+        routeMap[g.route] = g;
+      }
+    });
+
+    const sorted = ST884_ROUTES.filter(r => routeMap[r]).map(r => routeMap[r]);
+    Object.values(routeMap).filter(r => !ST884_ROUTES.includes(r.route) && r.dirs && Object.values(r.dirs).some(d => d.gmb)).forEach(r => sorted.push(r));
 
     renderSt884Cards(sorted);
     $('#st884Count').textContent = sorted.length + ' 條路線';
@@ -894,12 +961,13 @@ function renderSt884Cards(routes) {
     if (bestDiff <= 1) cls = 'arriving';
     else if (bestDiff <= 5) cls = 'due';
 
+    const isGmb = Object.values(r.dirs).some(d => d.gmb);
     const card = document.createElement('div');
     card.className = 'dash-card ' + cls;
 
     const bar = document.createElement('div');
     bar.className = 'd-route-bar';
-    bar.innerHTML = `<span class="d-route">${r.route}</span>`;
+    bar.innerHTML = `<span class="d-route">${r.route}</span>${isGmb ? '<span style="font-size:10px;background:rgba(255,255,255,.08);color:#aaa;padding:2px 8px;border-radius:8px;margin-left:6px;font-weight:600">綠Van</span>' : ''}`;
     card.appendChild(bar);
 
     ['inbound', 'outbound'].forEach(dir => {
@@ -911,12 +979,23 @@ function renderSt884Cards(routes) {
       const head = document.createElement('div');
       head.className = 'd-dir-head';
       const dirLabel = dir === 'outbound' ? '去程' : '回程';
-      head.innerHTML = `<span class="d-dir-label">${dirLabel}</span><span class="d-dest">→ ${d.dest_tc || d.dest_en || ''}</span>`;
+      let destLabel = '';
+      if (d.gmb) {
+        destLabel = d.dest_tc || d.orig_tc || '';
+      } else {
+        destLabel = d.dest_tc || d.dest_en || '';
+      }
+      head.innerHTML = `<span class="d-dir-label">${dirLabel}</span><span class="d-dest">→ ${destLabel}</span>`;
       section.appendChild(head);
 
       const stopInfo = document.createElement('div');
       stopInfo.className = 'd-stop-info';
-      stopInfo.innerHTML = `<span class="stop-seq">#${d.seq}</span><span class="stop-name">${st884StopName}</span>`;
+      const stopName = d.gmb ? '廣源邨巴士總站' : (st884StopNames[ST884_STOPS[d.stopIdx]?.id] || ST884_STOPS[d.stopIdx]?.name || '廣源');
+      if (d.gmb) {
+        stopInfo.innerHTML = `<span class="stop-name">廣源邨巴士總站</span>`;
+      } else {
+        stopInfo.innerHTML = `<span class="stop-seq">#${d.seq}</span><span class="stop-name">${stopName}</span>`;
+      }
       section.appendChild(stopInfo);
 
       const etasDiv = document.createElement('div');
