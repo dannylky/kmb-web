@@ -163,7 +163,7 @@
 <body>
 
 <div class="header">
-  <h1>🚍 KMB 巴士即時到站 <small>九巴實時到站監控面板</small> <span class="version">v1.0.9</span></h1>
+  <h1>🚍 KMB 巴士即時到站 <small>九巴實時到站監控面板</small> <span class="version">v1.1.0</span></h1>
   <div class="tabs">
     <button class="tab active" data-tab="hsuhk">🏫 香港恒生大學</button>
     <button class="tab" data-tab="mplus">🎨 柯士甸道西 (YT262)</button>
@@ -684,16 +684,17 @@ function renderNoSvcBar(grid, routes) {
 
 
 
-let hsuhkStopName = '';
+let hsuhkStopNames = ['', ''];
 
 async function refreshHsuhkDashboard() {
   try {
-    if (!hsuhkStopName) {
+    if (!hsuhkStopNames[0]) {
       const [d0, d1] = await Promise.all([
         fetchJSON(`${API}/stop/${HSUHK_STOPS[0]}`).catch(() => ({})),
         fetchJSON(`${API}/stop/${HSUHK_STOPS[1]}`).catch(() => ({})),
       ]);
-      hsuhkStopName = d0.name_tc || '香港恒生大學';
+      hsuhkStopNames[0] = d0.name_tc || '香港恒生大學';
+      hsuhkStopNames[1] = d1.name_tc || '香港恒生大學';
       const n0 = d0.name_tc || '香港恒生大學';
       const n1 = d1.name_tc || '香港恒生大學';
       const en0 = d0.name_en || 'THE HANG SENG UNIVERSITY OF HONG KONG';
@@ -704,18 +705,31 @@ async function refreshHsuhkDashboard() {
       fetchJSON(`${API}/stop-eta/${HSUHK_STOPS[0]}`).catch(() => []),
       fetchJSON(`${API}/stop-eta/${HSUHK_STOPS[1]}`).catch(() => [])
     ]);
-    const combined = [...etasA, ...etasB];
 
     const routeMap = {};
-    combined.forEach(e => {
+    etasA.forEach(e => {
       if (!e.route || !e.eta) return;
       const diff = Math.max(0, Math.round((new Date(e.eta) - new Date()) / 60000));
       const dir = e.dir === 'O' ? 'outbound' : 'inbound';
       if (!routeMap[e.route]) routeMap[e.route] = { route: e.route, dirs: {} };
       if (!routeMap[e.route].dirs[dir]) {
-        routeMap[e.route].dirs[dir] = { dir, seq: e.seq, dest_tc: e.dest_tc, dest_en: e.dest_en, etas: [] };
+        routeMap[e.route].dirs[dir] = { dir, seq: e.seq, dest_tc: e.dest_tc, dest_en: e.dest_en, etas: [], stopIdx: 0 };
       } else if (parseInt(e.seq) < parseInt(routeMap[e.route].dirs[dir].seq)) {
         routeMap[e.route].dirs[dir].seq = e.seq;
+        routeMap[e.route].dirs[dir].stopIdx = 0;
+      }
+      routeMap[e.route].dirs[dir].etas.push({ diff, eta: e.eta, rmk_tc: e.rmk_tc });
+    });
+    etasB.forEach(e => {
+      if (!e.route || !e.eta) return;
+      const diff = Math.max(0, Math.round((new Date(e.eta) - new Date()) / 60000));
+      const dir = e.dir === 'O' ? 'outbound' : 'inbound';
+      if (!routeMap[e.route]) routeMap[e.route] = { route: e.route, dirs: {} };
+      if (!routeMap[e.route].dirs[dir]) {
+        routeMap[e.route].dirs[dir] = { dir, seq: e.seq, dest_tc: e.dest_tc, dest_en: e.dest_en, etas: [], stopIdx: 1 };
+      } else if (parseInt(e.seq) < parseInt(routeMap[e.route].dirs[dir].seq)) {
+        routeMap[e.route].dirs[dir].seq = e.seq;
+        routeMap[e.route].dirs[dir].stopIdx = 1;
       }
       routeMap[e.route].dirs[dir].etas.push({ diff, eta: e.eta, rmk_tc: e.rmk_tc });
     });
@@ -727,7 +741,7 @@ async function refreshHsuhkDashboard() {
 
     sortRoutes(merged);
     renderHsuhkCards(merged);
-    $('#dashCount').textContent = sorted.length + ' 條路線';
+    $('#dashCount').textContent = merged.length + ' 條路線';
     $('#dashUpdated').textContent = '更新於 ' + new Date().toLocaleTimeString('zh-HK');
     $('#dashUpdatedBar').style.display = 'block';
     $('#dashUpdateTime').textContent = new Date().toLocaleTimeString('zh-HK');
@@ -779,7 +793,7 @@ function renderHsuhkCards(routes) {
 
       const stopInfo = document.createElement('div');
       stopInfo.className = 'd-stop-info';
-      stopInfo.innerHTML = `<span class="stop-seq">#${d.seq}</span><span class="stop-name">${hsuhkStopName}</span>`;
+      stopInfo.innerHTML = `<span class="stop-seq">#${d.seq}</span><span class="stop-name">${hsuhkStopNames[d.stopIdx != null ? d.stopIdx : 0]}</span>`;
       section.appendChild(stopInfo);
 
       const etasDiv = document.createElement('div');
