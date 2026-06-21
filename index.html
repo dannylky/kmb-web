@@ -643,7 +643,7 @@ async function gmbRoutes(cfg) {
   cfg.routes.forEach(g => {
     if (!map[g.route]) map[g.route] = { route: g.route, dirs: {}, forceCard: true };
     if (!map[g.route].dirs[g.dirKey]) {
-      map[g.route].dirs[g.dirKey] = { dir: g.dirKey, etas: [], dest_tc: g.dest };
+      map[g.route].dirs[g.dirKey] = { dir: g.dirKey, etas: [], dest_tc: g.dest, seq: g.stop_seq };
     }
   });
   try {
