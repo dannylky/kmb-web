@@ -630,14 +630,24 @@ async function fetchGmbRouteInfo() {
   }
 }
 
-async function fetchHsuhkGmbEta() {
+async function fetchHsuhkGmbEta(kmbRouteMap) {
   const results = {};
   HSUHK_GMB_ROUTES.forEach(g => {
     if (!results[g.route]) results[g.route] = { route: g.route, dirs: {} };
     if (!results[g.route].dirs[g.dirKey]) {
-      results[g.route].dirs[g.dirKey] = { dir: g.dirKey, etas: [], dest_tc: g.dest, orig_tc: g.orig, gmb: true };
+      if (kmbRouteMap && kmbRouteMap[g.route] && kmbRouteMap[g.route].dirs[g.dirKey]) {
+        results[g.route].dirs[g.dirKey] = kmbRouteMap[g.route].dirs[g.dirKey];
+      } else {
+        results[g.route].dirs[g.dirKey] = { dir: g.dirKey, etas: [], dest_tc: g.dest, orig_tc: g.orig, gmb: true };
+      }
     }
   });
+
+  const toProxy = HSUHK_GMB_ROUTES.filter(g => {
+    return !kmbRouteMap || !kmbRouteMap[g.route] || !kmbRouteMap[g.route].dirs[g.dirKey];
+  });
+  if (!toProxy.length) return Object.values(results);
+
   try {
     const fetchStop = async (stopId) => {
       const url = `${GMB_API}/eta/stop/${stopId}`;
@@ -651,7 +661,7 @@ async function fetchHsuhkGmbEta() {
       fetchStop(HSUHK_GMB_STOPS[1])
     ]);
     const allEntries = [...dataA, ...dataB];
-    HSUHK_GMB_ROUTES.forEach(g => {
+    toProxy.forEach(g => {
       const entry = allEntries.find(e => e.route_id === g.route_id && e.route_seq === g.route_seq && e.stop_seq === g.stop_seq);
       if (entry && entry.enabled) {
         (entry.eta || []).forEach(e => {
@@ -692,18 +702,12 @@ async function refreshHsuhkDashboard() {
       routeMap[e.route].dirs[dir].etas.push({ diff, eta: e.eta, rmk_tc: e.rmk_tc });
     });
 
-    const gmbRoutes = await fetchHsuhkGmbEta();
+    const gmbRoutes = await fetchHsuhkGmbEta(routeMap);
 
     const merged = Object.values(routeMap);
     gmbRoutes.forEach(g => {
       const existing = merged.find(m => m.route === g.route);
-      if (existing) {
-        Object.keys(g.dirs).forEach(dk => {
-          if (!existing.dirs[dk]) existing.dirs[dk] = g.dirs[dk];
-        });
-      } else {
-        merged.push(g);
-      }
+      if (!existing) merged.push(g);
     });
 
     const sorted = merged.sort((a, b) => {
@@ -938,14 +942,24 @@ function renderMplusCards(routes) {
 
 let st884StopNames = {};
 
-async function fetchSt884GmbEta() {
+async function fetchSt884GmbEta(kmbRouteMap) {
   const results = {};
   ST884_GMB_ROUTES.forEach(g => {
     if (!results[g.route]) results[g.route] = { route: g.route, dirs: {} };
     if (!results[g.route].dirs[g.dirKey]) {
-      results[g.route].dirs[g.dirKey] = { dir: g.dirKey, etas: [], dest_tc: g.dest, orig_tc: g.orig, gmb: true, seq: g.stop_seq };
+      if (kmbRouteMap && kmbRouteMap[g.route] && kmbRouteMap[g.route].dirs[g.dirKey]) {
+        results[g.route].dirs[g.dirKey] = kmbRouteMap[g.route].dirs[g.dirKey];
+      } else {
+        results[g.route].dirs[g.dirKey] = { dir: g.dirKey, etas: [], dest_tc: g.dest, orig_tc: g.orig, gmb: true, seq: g.stop_seq };
+      }
     }
   });
+
+  const toProxy = ST884_GMB_ROUTES.filter(g => {
+    return !kmbRouteMap || !kmbRouteMap[g.route] || !kmbRouteMap[g.route].dirs[g.dirKey];
+  });
+  if (!toProxy.length) return Object.values(results);
+
   try {
     const fetchStop = async (stopId) => {
       try {
@@ -953,10 +967,10 @@ async function fetchSt884GmbEta() {
         return j.data || j;
       } catch(e) { return []; }
     };
-    const allStopIds = [...new Set(ST884_GMB_ROUTES.map(g => g.gmb_stop))];
+    const allStopIds = [...new Set(toProxy.map(g => g.gmb_stop))];
     const allData = await Promise.all(allStopIds.map(fetchStop));
     const allEntries = allData.flat();
-    ST884_GMB_ROUTES.forEach(g => {
+    toProxy.forEach(g => {
       const entry = allEntries.find(e => e.route_id === g.route_id && e.route_seq === g.route_seq && e.stop_seq === g.stop_seq);
       if (entry && entry.enabled) {
         (entry.eta || []).forEach(e => {
@@ -1006,16 +1020,9 @@ async function refreshSt884Dashboard() {
       });
     });
 
-    const gmbRoutes = await fetchSt884GmbEta();
+    const gmbRoutes = await fetchSt884GmbEta(routeMap);
     gmbRoutes.forEach(g => {
-      const existing = Object.values(routeMap).find(m => m.route === g.route);
-      if (existing) {
-        Object.keys(g.dirs).forEach(dk => {
-          if (!existing.dirs[dk]) existing.dirs[dk] = g.dirs[dk];
-        });
-      } else {
-        routeMap[g.route] = g;
-      }
+      if (!routeMap[g.route]) routeMap[g.route] = g;
     });
 
     const sorted = ST884_ROUTES.filter(r => routeMap[r]).map(r => routeMap[r]);
@@ -1127,14 +1134,24 @@ function renderSt884Cards(routes) {
 
 let st894StopNames = {};
 
-async function fetchSt894GmbEta() {
+async function fetchSt894GmbEta(kmbRouteMap) {
   const results = {};
   ST894_GMB_ROUTES.forEach(g => {
     if (!results[g.route]) results[g.route] = { route: g.route, dirs: {} };
     if (!results[g.route].dirs[g.dirKey]) {
-      results[g.route].dirs[g.dirKey] = { dir: g.dirKey, etas: [], dest_tc: g.dest, orig_tc: g.orig, gmb: true, seq: g.stop_seq };
+      if (kmbRouteMap && kmbRouteMap[g.route] && kmbRouteMap[g.route].dirs[g.dirKey]) {
+        results[g.route].dirs[g.dirKey] = kmbRouteMap[g.route].dirs[g.dirKey];
+      } else {
+        results[g.route].dirs[g.dirKey] = { dir: g.dirKey, etas: [], dest_tc: g.dest, orig_tc: g.orig, gmb: true, seq: g.stop_seq };
+      }
     }
   });
+
+  const toProxy = ST894_GMB_ROUTES.filter(g => {
+    return !kmbRouteMap || !kmbRouteMap[g.route] || !kmbRouteMap[g.route].dirs[g.dirKey];
+  });
+  if (!toProxy.length) return Object.values(results);
+
   try {
     const fetchStop = async (stopId) => {
       try {
@@ -1142,10 +1159,10 @@ async function fetchSt894GmbEta() {
         return j.data || j;
       } catch(e) { return []; }
     };
-    const allStopIds = [...new Set(ST894_GMB_ROUTES.map(g => g.gmb_stop))];
+    const allStopIds = [...new Set(toProxy.map(g => g.gmb_stop))];
     const allData = await Promise.all(allStopIds.map(fetchStop));
     const allEntries = allData.flat();
-    ST894_GMB_ROUTES.forEach(g => {
+    toProxy.forEach(g => {
       const entry = allEntries.find(e => e.route_id === g.route_id && e.route_seq === g.route_seq && e.stop_seq === g.stop_seq);
       if (entry && entry.enabled) {
         (entry.eta || []).forEach(e => {
@@ -1195,16 +1212,9 @@ async function refreshSt894Dashboard() {
       });
     });
 
-    const gmbRoutes = await fetchSt894GmbEta();
+    const gmbRoutes = await fetchSt894GmbEta(routeMap);
     gmbRoutes.forEach(g => {
-      const existing = Object.values(routeMap).find(m => m.route === g.route);
-      if (existing) {
-        Object.keys(g.dirs).forEach(dk => {
-          if (!existing.dirs[dk]) existing.dirs[dk] = g.dirs[dk];
-        });
-      } else {
-        routeMap[g.route] = g;
-      }
+      if (!routeMap[g.route]) routeMap[g.route] = g;
     });
 
     const sorted = ST894_ROUTES.filter(r => routeMap[r]).map(r => routeMap[r]);
