@@ -160,7 +160,7 @@
 <body>
 
 <div class="header">
-  <h1>🚍 KMB 巴士即時到站 <small>九巴實時到站監控面板</small> <span class="version">v0.10.0</span></h1>
+  <h1>🚍 KMB 巴士即時到站 <small>九巴實時到站監控面板</small> <span class="version">v0.11.0</span></h1>
   <div class="tabs">
     <button class="tab active" data-tab="hsuhk">🏫 恒大概覽 (ST330)</button>
     <button class="tab" data-tab="mplus">🎨 柯士甸道西 (YT262)</button>
@@ -275,18 +275,8 @@
 
 <script>
 const API = 'https://data.etabus.gov.hk/v1/transport/kmb';
-const GMB_API = 'http://localhost:8899';
 const LS_KEY = 'kmb_bookmarks';
 const HSUHK_STOPS = ['3F01C915E856B018', 'BC39BFC3C7BC3009'];
-const HSUHK_GMB_STOPS = ['20002290', '20002295'];
-const HSUHK_GMB_ROUTES = [
-  { route: '808', route_id: 2004758, route_seq: 1, stop_seq: 15, gmb_stop: '20002290', dirKey: 'outbound', orig: '錦英苑', dest: '威爾斯親王醫院' },
-  { route: '808', route_id: 2004758, route_seq: 2, stop_seq: 5, gmb_stop: '20002295', dirKey: 'inbound', orig: '威爾斯親王醫院', dest: '錦英苑' },
-  { route: '806A', route_id: 2001821, route_seq: 1, stop_seq: 5, gmb_stop: '20002290', dirKey: 'outbound', orig: '黃泥頭', dest: '運頭塘' },
-  { route: '806A', route_id: 2001821, route_seq: 2, stop_seq: 27, gmb_stop: '20002295', dirKey: 'inbound', orig: '運頭塘', dest: '黃泥頭' },
-  { route: '806X', route_id: 2011226, route_seq: 1, stop_seq: 5, gmb_stop: '20002290', dirKey: 'outbound', orig: '黃泥頭', dest: '運頭塘' },
-  { route: '806X', route_id: 2011226, route_seq: 2, stop_seq: 18, gmb_stop: '20002295', dirKey: 'inbound', orig: '運頭塘', dest: '黃泥頭' }
-];
 const MPLUS_STOP = '0CC0B21EFF42EE19';
 const MPLUS_ROUTES = ['213E', '215P', '215X', '261B', '281A', 'W4'];
 
@@ -297,12 +287,6 @@ const ST884_STOPS = [
   { id: '6FCDCBEC73F3AAF5', name: '廣源巴士總站 (ST880)' },
 ];
 const ST884_ROUTES = ['281A', '281E', 'N182', '82X', '82C', '85A', '49X', '84M'];
-const ST884_GMB_ROUTES = [
-  { route: '804', route_id: 2010275, route_seq: 1, stop_seq: 1, gmb_stop: '20002255', dirKey: 'outbound', orig: '廣源', dest: '顯徑' },
-  { route: '804', route_id: 2010275, route_seq: 2, stop_seq: 19, gmb_stop: '20002255', dirKey: 'inbound', orig: '顯徑', dest: '廣源' },
-  { route: '806A', route_id: 2001821, route_seq: 1, stop_seq: 2, gmb_stop: '20001545', dirKey: 'outbound', orig: '黃泥頭', dest: '運頭塘' },
-  { route: '806A', route_id: 2001821, route_seq: 2, stop_seq: 3, gmb_stop: '20007673', dirKey: 'inbound', orig: '運頭塘', dest: '黃泥頭' },
-];
 
 const ST894_STOPS = [
   { id: 'D75CEF6318A515DE', name: '黃泥頭巴士總站 (ST894)' },
@@ -311,11 +295,6 @@ const ST894_STOPS = [
   { id: 'F0852C7827CC97EB', name: '黃泥頭巴士總站 (ST890)' },
 ];
 const ST894_ROUTES = ['86', 'A42', 'NA41', '83K', '83S', '83X'];
-const ST894_GMB_ROUTES = [
-  { route: '65K', route_id: 2009081, route_seq: 1, stop_seq: 1, gmb_stop: '20001544', dirKey: 'outbound', orig: '黃泥頭', dest: '火炭站 (循環線)' },
-  { route: '806A', route_id: 2001821, route_seq: 1, stop_seq: 1, gmb_stop: '20001544', dirKey: 'outbound', orig: '黃泥頭', dest: '運頭塘' },
-  { route: '806A', route_id: 2001821, route_seq: 2, stop_seq: 30, gmb_stop: '20001544', dirKey: 'inbound', orig: '運頭塘', dest: '黃泥頭' },
-];
 
 const ST790_STOP = '3114213F8975F536';
 const ST790_ROUTES = ['75X', '82X', '85M', '272S', '83X', '89C', '89X', '307', '373', '678', '680', '681', 'N307', '74X', '673', '681P', '85X', '88', '88X', '80X', '90', '78C', '78X', '682'];
@@ -612,66 +591,7 @@ function renderNoSvcBar(grid, routes) {
   grid.appendChild(bar);
 }
 
-let hsuhkGmbRouteNames = {};
 
-async function fetchGmbRouteInfo() {
-  const codes = ['808', '806A', '806X'];
-  for (const code of codes) {
-    try {
-      const r = await fetchJSON(`${GMB_API}/route/NT/${code}`);
-      const route = Array.isArray(r) ? r[0] : r;
-      if (route && route.directions) {
-        route.directions.forEach(d => {
-          const key = code + '-' + d.route_seq;
-          hsuhkGmbRouteNames[key] = { orig: d.orig_tc, dest: d.dest_tc };
-        });
-      }
-    } catch (e) {}
-  }
-}
-
-async function fetchHsuhkGmbEta(kmbRouteMap) {
-  const results = {};
-  HSUHK_GMB_ROUTES.forEach(g => {
-    if (!results[g.route]) results[g.route] = { route: g.route, dirs: {} };
-    if (!results[g.route].dirs[g.dirKey]) {
-      if (kmbRouteMap && kmbRouteMap[g.route] && kmbRouteMap[g.route].dirs[g.dirKey]) {
-        results[g.route].dirs[g.dirKey] = kmbRouteMap[g.route].dirs[g.dirKey];
-      } else {
-        results[g.route].dirs[g.dirKey] = { dir: g.dirKey, etas: [], dest_tc: g.dest, orig_tc: g.orig, gmb: true };
-      }
-    }
-  });
-
-  const toProxy = HSUHK_GMB_ROUTES.filter(g => {
-    return !kmbRouteMap || !kmbRouteMap[g.route] || !kmbRouteMap[g.route].dirs[g.dirKey];
-  });
-  if (!toProxy.length) return Object.values(results);
-
-  try {
-    const fetchStop = async (stopId) => {
-      const url = `${GMB_API}/eta/stop/${stopId}`;
-      try {
-        const j = await (await fetch(url)).json();
-        return j.data || j;
-      } catch(e) { return []; }
-    };
-    const [dataA, dataB] = await Promise.all([
-      fetchStop(HSUHK_GMB_STOPS[0]),
-      fetchStop(HSUHK_GMB_STOPS[1])
-    ]);
-    const allEntries = [...dataA, ...dataB];
-    toProxy.forEach(g => {
-      const entry = allEntries.find(e => e.route_id === g.route_id && e.route_seq === g.route_seq && e.stop_seq === g.stop_seq);
-      if (entry && entry.enabled) {
-        (entry.eta || []).forEach(e => {
-          if (e.diff != null) results[g.route].dirs[g.dirKey].etas.push({ diff: e.diff });
-        });
-      }
-    });
-  } catch(e) {}
-  return Object.values(results);
-}
 
 let hsuhkStopName = '';
 
@@ -702,13 +622,7 @@ async function refreshHsuhkDashboard() {
       routeMap[e.route].dirs[dir].etas.push({ diff, eta: e.eta, rmk_tc: e.rmk_tc });
     });
 
-    const gmbRoutes = await fetchHsuhkGmbEta(routeMap);
-
     const merged = Object.values(routeMap);
-    gmbRoutes.forEach(g => {
-      const existing = merged.find(m => m.route === g.route);
-      if (!existing) merged.push(g);
-    });
 
     const sorted = merged.sort((a, b) => {
       const na = parseInt(a.route), nb = parseInt(b.route);
@@ -747,13 +661,12 @@ function renderHsuhkCards(routes) {
     if (bestDiff <= 1) cls = 'arriving';
     else if (bestDiff <= 5) cls = 'due';
 
-    const isGmb = Object.values(r.dirs).some(d => d.gmb);
     const card = document.createElement('div');
     card.className = 'dash-card ' + cls;
 
     const bar = document.createElement('div');
     bar.className = 'd-route-bar';
-    bar.innerHTML = `<span class="d-route">${r.route}</span>${isGmb ? '<span style="font-size:10px;background:rgba(255,255,255,.08);color:#aaa;padding:2px 8px;border-radius:8px;margin-left:6px;font-weight:600">綠Van</span>' : ''}`;
+    bar.innerHTML = `<span class="d-route">${r.route}</span>`;
     card.appendChild(bar);
 
     ['inbound', 'outbound'].forEach(dir => {
@@ -765,22 +678,12 @@ function renderHsuhkCards(routes) {
       const head = document.createElement('div');
       head.className = 'd-dir-head';
       const dirLabel = dir === 'outbound' ? '去程' : '回程';
-      let destLabel = '';
-      if (d.gmb) {
-        destLabel = d.dest_tc || d.orig_tc || '';
-      } else {
-        destLabel = d.dest_tc || d.dest_en || '';
-      }
-      head.innerHTML = `<span class="d-dir-label">${dirLabel}</span><span class="d-dest">→ ${destLabel}</span>`;
+      head.innerHTML = `<span class="d-dir-label">${dirLabel}</span><span class="d-dest">→ ${d.dest_tc || d.dest_en || ''}</span>`;
       section.appendChild(head);
 
       const stopInfo = document.createElement('div');
       stopInfo.className = 'd-stop-info';
-      if (d.gmb) {
-        stopInfo.innerHTML = `<span class="stop-name">廣善街, 近香港恒生大學</span>`;
-      } else {
-        stopInfo.innerHTML = `<span class="stop-seq">#${d.seq}</span><span class="stop-name">${hsuhkStopName}</span>`;
-      }
+      stopInfo.innerHTML = `<span class="stop-seq">#${d.seq}</span><span class="stop-name">${hsuhkStopName}</span>`;
       section.appendChild(stopInfo);
 
       const etasDiv = document.createElement('div');
@@ -942,46 +845,6 @@ function renderMplusCards(routes) {
 
 let st884StopNames = {};
 
-async function fetchSt884GmbEta(kmbRouteMap) {
-  const results = {};
-  ST884_GMB_ROUTES.forEach(g => {
-    if (!results[g.route]) results[g.route] = { route: g.route, dirs: {} };
-    if (!results[g.route].dirs[g.dirKey]) {
-      if (kmbRouteMap && kmbRouteMap[g.route] && kmbRouteMap[g.route].dirs[g.dirKey]) {
-        results[g.route].dirs[g.dirKey] = kmbRouteMap[g.route].dirs[g.dirKey];
-      } else {
-        results[g.route].dirs[g.dirKey] = { dir: g.dirKey, etas: [], dest_tc: g.dest, orig_tc: g.orig, gmb: true, seq: g.stop_seq };
-      }
-    }
-  });
-
-  const toProxy = ST884_GMB_ROUTES.filter(g => {
-    return !kmbRouteMap || !kmbRouteMap[g.route] || !kmbRouteMap[g.route].dirs[g.dirKey];
-  });
-  if (!toProxy.length) return Object.values(results);
-
-  try {
-    const fetchStop = async (stopId) => {
-      try {
-        const j = await (await fetch(`${GMB_API}/eta/stop/${stopId}`)).json();
-        return j.data || j;
-      } catch(e) { return []; }
-    };
-    const allStopIds = [...new Set(toProxy.map(g => g.gmb_stop))];
-    const allData = await Promise.all(allStopIds.map(fetchStop));
-    const allEntries = allData.flat();
-    toProxy.forEach(g => {
-      const entry = allEntries.find(e => e.route_id === g.route_id && e.route_seq === g.route_seq && e.stop_seq === g.stop_seq);
-      if (entry && entry.enabled) {
-        (entry.eta || []).forEach(e => {
-          if (e.diff != null) results[g.route].dirs[g.dirKey].etas.push({ diff: e.diff });
-        });
-      }
-    });
-  } catch(e) {}
-  return Object.values(results);
-}
-
 async function refreshSt884Dashboard() {
   try {
     for (const s of ST884_STOPS) {
@@ -1020,13 +883,7 @@ async function refreshSt884Dashboard() {
       });
     });
 
-    const gmbRoutes = await fetchSt884GmbEta(routeMap);
-    gmbRoutes.forEach(g => {
-      if (!routeMap[g.route]) routeMap[g.route] = g;
-    });
-
     const sorted = ST884_ROUTES.filter(r => routeMap[r]).map(r => routeMap[r]);
-    Object.values(routeMap).filter(r => !ST884_ROUTES.includes(r.route) && r.dirs && Object.values(r.dirs).some(d => d.gmb)).forEach(r => sorted.push(r));
 
     renderSt884Cards(sorted);
     $('#st884Count').textContent = sorted.length + ' 條路線';
@@ -1059,13 +916,12 @@ function renderSt884Cards(routes) {
     if (bestDiff <= 1) cls = 'arriving';
     else if (bestDiff <= 5) cls = 'due';
 
-    const isGmb = Object.values(r.dirs).some(d => d.gmb);
     const card = document.createElement('div');
     card.className = 'dash-card ' + cls;
 
     const bar = document.createElement('div');
     bar.className = 'd-route-bar';
-    bar.innerHTML = `<span class="d-route">${r.route}</span>${isGmb ? '<span style="font-size:10px;background:rgba(255,255,255,.08);color:#aaa;padding:2px 8px;border-radius:8px;margin-left:6px;font-weight:600">綠Van</span>' : ''}`;
+    bar.innerHTML = `<span class="d-route">${r.route}</span>`;
     card.appendChild(bar);
 
     ['inbound', 'outbound'].forEach(dir => {
@@ -1077,23 +933,13 @@ function renderSt884Cards(routes) {
       const head = document.createElement('div');
       head.className = 'd-dir-head';
       const dirLabel = dir === 'outbound' ? '去程' : '回程';
-      let destLabel = '';
-      if (d.gmb) {
-        destLabel = d.dest_tc || d.orig_tc || '';
-      } else {
-        destLabel = d.dest_tc || d.dest_en || '';
-      }
-      head.innerHTML = `<span class="d-dir-label">${dirLabel}</span><span class="d-dest">→ ${destLabel}</span>`;
+      head.innerHTML = `<span class="d-dir-label">${dirLabel}</span><span class="d-dest">→ ${d.dest_tc || d.dest_en || ''}</span>`;
       section.appendChild(head);
 
       const stopInfo = document.createElement('div');
       stopInfo.className = 'd-stop-info';
-      const stopName = d.gmb ? '廣源邨巴士總站' : (st884StopNames[ST884_STOPS[d.stopIdx]?.id] || ST884_STOPS[d.stopIdx]?.name || '廣源');
-      if (d.gmb) {
-        stopInfo.innerHTML = `<span class="stop-name">廣源邨巴士總站</span>`;
-      } else {
-        stopInfo.innerHTML = `<span class="stop-seq">#${d.seq}</span><span class="stop-name">${stopName}</span>`;
-      }
+      const stopName = st884StopNames[ST884_STOPS[d.stopIdx]?.id] || ST884_STOPS[d.stopIdx]?.name || '廣源';
+      stopInfo.innerHTML = `<span class="stop-seq">#${d.seq}</span><span class="stop-name">${stopName}</span>`;
       section.appendChild(stopInfo);
 
       const etasDiv = document.createElement('div');
@@ -1134,46 +980,6 @@ function renderSt884Cards(routes) {
 
 let st894StopNames = {};
 
-async function fetchSt894GmbEta(kmbRouteMap) {
-  const results = {};
-  ST894_GMB_ROUTES.forEach(g => {
-    if (!results[g.route]) results[g.route] = { route: g.route, dirs: {} };
-    if (!results[g.route].dirs[g.dirKey]) {
-      if (kmbRouteMap && kmbRouteMap[g.route] && kmbRouteMap[g.route].dirs[g.dirKey]) {
-        results[g.route].dirs[g.dirKey] = kmbRouteMap[g.route].dirs[g.dirKey];
-      } else {
-        results[g.route].dirs[g.dirKey] = { dir: g.dirKey, etas: [], dest_tc: g.dest, orig_tc: g.orig, gmb: true, seq: g.stop_seq };
-      }
-    }
-  });
-
-  const toProxy = ST894_GMB_ROUTES.filter(g => {
-    return !kmbRouteMap || !kmbRouteMap[g.route] || !kmbRouteMap[g.route].dirs[g.dirKey];
-  });
-  if (!toProxy.length) return Object.values(results);
-
-  try {
-    const fetchStop = async (stopId) => {
-      try {
-        const j = await (await fetch(`${GMB_API}/eta/stop/${stopId}`)).json();
-        return j.data || j;
-      } catch(e) { return []; }
-    };
-    const allStopIds = [...new Set(toProxy.map(g => g.gmb_stop))];
-    const allData = await Promise.all(allStopIds.map(fetchStop));
-    const allEntries = allData.flat();
-    toProxy.forEach(g => {
-      const entry = allEntries.find(e => e.route_id === g.route_id && e.route_seq === g.route_seq && e.stop_seq === g.stop_seq);
-      if (entry && entry.enabled) {
-        (entry.eta || []).forEach(e => {
-          if (e.diff != null) results[g.route].dirs[g.dirKey].etas.push({ diff: e.diff });
-        });
-      }
-    });
-  } catch(e) {}
-  return Object.values(results);
-}
-
 async function refreshSt894Dashboard() {
   try {
     for (const s of ST894_STOPS) {
@@ -1212,13 +1018,7 @@ async function refreshSt894Dashboard() {
       });
     });
 
-    const gmbRoutes = await fetchSt894GmbEta(routeMap);
-    gmbRoutes.forEach(g => {
-      if (!routeMap[g.route]) routeMap[g.route] = g;
-    });
-
     const sorted = ST894_ROUTES.filter(r => routeMap[r]).map(r => routeMap[r]);
-    Object.values(routeMap).filter(r => !ST894_ROUTES.includes(r.route) && r.dirs && Object.values(r.dirs).some(d => d.gmb)).forEach(r => sorted.push(r));
 
     renderSt894Cards(sorted);
     $('#st894Count').textContent = sorted.length + ' 條路線';
@@ -1251,13 +1051,12 @@ function renderSt894Cards(routes) {
     if (bestDiff <= 1) cls = 'arriving';
     else if (bestDiff <= 5) cls = 'due';
 
-    const isGmb = Object.values(r.dirs).some(d => d.gmb);
     const card = document.createElement('div');
     card.className = 'dash-card ' + cls;
 
     const bar = document.createElement('div');
     bar.className = 'd-route-bar';
-    bar.innerHTML = `<span class="d-route">${r.route}</span>${isGmb ? '<span style="font-size:10px;background:rgba(255,255,255,.08);color:#aaa;padding:2px 8px;border-radius:8px;margin-left:6px;font-weight:600">綠Van</span>' : ''}`;
+    bar.innerHTML = `<span class="d-route">${r.route}</span>`;
     card.appendChild(bar);
 
     ['inbound', 'outbound'].forEach(dir => {
@@ -1269,23 +1068,13 @@ function renderSt894Cards(routes) {
       const head = document.createElement('div');
       head.className = 'd-dir-head';
       const dirLabel = dir === 'outbound' ? '去程' : '回程';
-      let destLabel = '';
-      if (d.gmb) {
-        destLabel = d.dest_tc || d.orig_tc || '';
-      } else {
-        destLabel = d.dest_tc || d.dest_en || '';
-      }
-      head.innerHTML = `<span class="d-dir-label">${dirLabel}</span><span class="d-dest">→ ${destLabel}</span>`;
+      head.innerHTML = `<span class="d-dir-label">${dirLabel}</span><span class="d-dest">→ ${d.dest_tc || d.dest_en || ''}</span>`;
       section.appendChild(head);
 
       const stopInfo = document.createElement('div');
       stopInfo.className = 'd-stop-info';
-      const stopName = d.gmb ? '黃泥頭巴士總站' : (st894StopNames[ST894_STOPS[d.stopIdx]?.id] || ST894_STOPS[d.stopIdx]?.name || '黃泥頭');
-      if (d.gmb) {
-        stopInfo.innerHTML = `<span class="stop-name">黃泥頭巴士總站</span>`;
-      } else {
-        stopInfo.innerHTML = `<span class="stop-seq">#${d.seq}</span><span class="stop-name">${stopName}</span>`;
-      }
+      const stopName = st894StopNames[ST894_STOPS[d.stopIdx]?.id] || ST894_STOPS[d.stopIdx]?.name || '黃泥頭';
+      stopInfo.innerHTML = `<span class="stop-seq">#${d.seq}</span><span class="stop-name">${stopName}</span>`;
       section.appendChild(stopInfo);
 
       const etasDiv = document.createElement('div');
@@ -1639,7 +1428,6 @@ loadBookmarks();
   } catch (e) {
     showToast('無法載入路線列表: ' + e.message);
   }
-  await fetchGmbRouteInfo();
   if (bookmarks.length) {
     refreshAllBookmarks();
     startAutoRefresh();

@@ -3,7 +3,7 @@
 - **系統名稱**: KMB Real-time Bus ETA Dashboard
 - **程式碼位置**: `C:\Works\OpenCode\kmb-web`
 - **GitHub**: `https://github.com/dannylky/kmb-web`
-- **目前版本**: **v0.10.0**
+- **目前版本**: **v0.11.0**
 - **上次更新**: 2026-06-21
 
 ---
@@ -28,17 +28,17 @@
 │  │  └────────────────────────────────┘  │            │
 │  └──────────────────────────────────────┘            │
 │           │                  │                        │
-│           ▼                  ▼                        │
-│  ┌──────────────┐  ┌─────────────────┐               │
-│  │ KMB Open API  │  │  GMB Proxy       │              │
-│  │ (CORS OK)     │  │ (localhost:8899) │              │
-│  └──────┬───────┘  └────────┬────────┘               │
-│         │                   │                        │
-└─────────┼───────────────────┼─────────────────────────┘
-          │                   │
-          ▼                   ▼
-  data.etabus.gov.hk   data.etagmb.gov.hk
-  (KMB)                (綠色專線小巴)
+│           ▼                                        │
+│  ┌──────────────┐                                   │
+│  │ KMB Open API  │                                   │
+│  │ (CORS OK)     │                                   │
+│  └──────┬───────┘                                   │
+│         │                                           │
+└─────────┼────────────────────────────────────────────┘
+          │
+          ▼
+  data.etabus.gov.hk
+  (KMB only)
 ```
 
 ### 1.2 元件說明
@@ -46,34 +46,31 @@
 | 元件 | 位置 | 說明 |
 |------|------|------|
 | **index.html** | `kmb-web/index.html` | 單頁式應用 (SPA)，純前端，無需 build 工具。內含全部 HTML、CSS、JavaScript。 |
-| **gmb_proxy.py** | `kmb-web/gmb_proxy.py` | CORS Proxy 伺服器，將瀏覽器請求轉發至 GMB API 並回補 CORS headers。純 Python stdlib，無額外依賴。 |
+
 | **MCP-KMB-HK** | `C:\Works\OpenCode\MCP-KMB-HK` | FastMCP 伺服器，提供 8 個 KMB API 工具給 opencode 使用。與網頁獨立運作。 |
 
 ### 1.3 資料流
 
 1. **KMB 到站資料**: 瀏覽器直接呼叫 `https://data.etabus.gov.hk/v1/transport/kmb/stop-eta/{stopId}`（API 支援 CORS `*`）
 2. **路線列表**: 瀏覽器直接呼叫 `https://data.etabus.gov.hk/v1/transport/kmb/route/`
-3. **GMB 到站資料**: 瀏覽器呼叫 `http://localhost:8899/eta/stop/{stopId}` → gmb_proxy.py 轉發至 `https://data.etagmb.gov.hk/eta/stop/{stopId}` → 回傳含 CORS headers 的回應
-4. **GMB 路線資料**: 瀏覽器呼叫 `http://localhost:8899/route/NT/{code}` → 同上機制轉發
 
 ### 1.4 API 端點一覽
 
 | API | 基礎 URL | CORS 支援 |
 |-----|---------|-----------|
 | KMB Open API | `https://data.etabus.gov.hk/v1/transport/kmb` | ✅ 原生支援 |
-| GMB API | `https://data.etagmb.gov.hk` | ❌ 需經 proxy |
-| GMB Proxy | `http://localhost:8899` | ✅ Proxy 自行加入 |
+| GMB API | `https://data.etagmb.gov.hk` | ❌ 不再使用 |
 
 ### 1.5 分頁配置
 
-| 分頁 ID | 顯示名稱 | Stop IDs | 路線數 | GMB 路線 |
-|---------|---------|----------|--------|---------|
-| hsuhk | 🏫 恒大概覽 (ST330) | `3F01C915E856B018`, `BC39BFC3C7BC3009` | 所有經停路線 | 808, 806A, 806X |
-| mplus | 🎨 柯士甸道西 (YT262) | `0CC0B21EFF42EE19` | 9 (固定) | — |
-| st884 | 🚌 廣源 (ST884) | 4 個停車點 | 8 (固定) | 804, 806A |
-| st894 | 🚌 黃泥頭 (ST894) | 4 個停車點 | 6 (固定) | 65K, 806A |
-| st790 | 🚌 大老山 (ST790) | `3114213F8975F536` | 24 (固定) | — |
-| bookmarks | 📌 我的路線 | 動態（自訂） | 使用者自訂 | — |
+| 分頁 ID | 顯示名稱 | Stop IDs | 路線數 |
+|---------|---------|----------|--------|
+| hsuhk | 🏫 恒大概覽 (ST330) | `3F01C915E856B018`, `BC39BFC3C7BC3009` | 所有經停路線 |
+| mplus | 🎨 柯士甸道西 (YT262) | `0CC0B21EFF42EE19` | 9 (固定) |
+| st884 | 🚌 廣源 (ST884) | 4 個停車點 | 8 (固定) |
+| st894 | 🚌 黃泥頭 (ST894) | 4 個停車點 | 6 (固定) |
+| st790 | 🚌 大老山 (ST790) | `3114213F8975F536` | 24 (固定) |
+| bookmarks | 📌 我的路線 | 動態（自訂） | 使用者自訂 |
 
 ### 1.6 更新機制
 
@@ -89,19 +86,16 @@
 ### 2.1 快速啟動
 
 ```powershell
-# 1. 啟動 GMB Proxy（在 kmb-web 目錄下）
 cd C:\Works\OpenCode\kmb-web
-python gmb_proxy.py
-# 預設埠 8899，可指定：python gmb_proxy.py 9999
 
-# 2. 啟動網頁伺服器（選擇一種方式）
+# 1. 啟動網頁伺服器（選擇一種方式）
 # 選項 A: Python HTTP server
 python -m http.server 8080
 
 # 選項 B: 直接開啟 HTML（部分瀏覽器不支援 file:// fetch）
 # 直接雙擊 index.html
 
-# 3. 開啟瀏覽器
+# 2. 開啟瀏覽器
 # http://localhost:8080/
 ```
 
@@ -109,34 +103,30 @@ python -m http.server 8080
 
 - Python 3.8+（測試於 3.12）
 - 瀏覽器：Chrome 90+ / Edge 90+ / Firefox 90+ / Safari 15+
-- 無需額外 Python 套件（gmb_proxy.py 僅使用標準函式庫）
+- 無需後端伺服器，KMB API 直接從瀏覽器呼叫
 
-### 2.3 開發用啟動（含 opencode MCP）
+### 2.3 發布至 GitHub Pages
+
+```powershell
+cd C:\Works\OpenCode\kmb-web
+git add -A
+git commit -m "vX.Y.Z: 變更說明"
+git push origin master --tags
+```
+
+GitHub Pages URL: `https://dannylky.github.io/kmb-web/`
+
+### 2.4 開發用啟動（含 opencode MCP）
 
 ```powershell
 # 啟動 opencode（會自動啟動 MCP-KMB-HK 伺服器）
 opencode
 ```
 
-### 2.4 部署至 GitHub Pages
-
-```powershell
-cd C:\Works\OpenCode\kmb-web
-git add -A
-git commit -m "vX.Y.Z: 變更說明"
-git push origin main
-```
-
-GitHub Pages URL: `https://dannylky.github.io/kmb-web/`
-
-**注意**: GitHub Pages 上 GMB 資料無法顯示（因無法跑 proxy）。需在本機執行 proxy 才能取得 GMB ETAs。
-
 ### 2.5 故障排除
 
 | 問題 | 原因 | 解決方法 |
 |------|------|---------|
-| GMB 路線顯示「暫未服務」 | GMB Proxy 未啟動 | 執行 `python gmb_proxy.py` |
-| Proxy 埠被佔用 | 其他程式使用相同埠 | `python gmb_proxy.py 8900`，並修改 index.html 中 `GMB_API` |
 | 所有路線顯示「暫未服務」 | KMB API 無法存取或網路問題 | 檢查網路連線，或 KMB API 暫時維護 |
 | 搜尋無結果 | 路線列表未載入 | 重新整理頁面 |
 
@@ -188,6 +178,7 @@ vMAJOR.MINOR.PATCH
 | **v0.8.1** | 2026-06-21 | PATCH | 無服務路線 ETA 恢復時自動回到正常卡片區 | `5acaf41`（同次修正） |
 | **v0.9.0** | 2026-06-21 | MINOR | 新增 `gmb_proxy.py` CORS Proxy；index.html 切換至 proxy URL 解決 GMB CORS 封鎖 | — |
 | **v0.10.0** | 2026-06-21 | MINOR | KMB-first：綠Van路線先查 KMB API（有資料則用），無資料時才 fallback 至 GMB proxy | `17ffc30` |
+| **v0.11.0** | 2026-06-21 | MINOR | 移除所有 GMB proxy 相關程式碼，只保留 KMB API；刪除 `gmb_proxy.py`、GMB route configs、GMB fetch 函數、綠Van badge 及相關渲染邏輯 | `1276d38` |
 
 ---
 
@@ -196,7 +187,7 @@ vMAJOR.MINOR.PATCH
 | 檔案 | 說明 |
 |------|------|
 | `index.html` | 主網頁（單頁應用） |
-| `gmb_proxy.py` | GMB CORS Proxy 伺服器 |
+
 | `opencode.json` | opencode MCP 設定檔 |
 | `OPERATIONS.md` | 本文件 |
 | `MCP-KMB-HK/server.py` | FastMCP KMB API 工具伺服器 |
@@ -217,14 +208,7 @@ GET /stop-eta/{stopId}                  — 站點 ETA
 GET /route-stop/{route}/{dir}/{st}      — 路線經停站
 ```
 
-### 6.2 GMB Proxy API 端點
-
-```
-GET /eta/stop/{stopId}                  — 站點 GMB ETA
-GET /route/NT/{routeCode}               — GMB 路線資料
-```
-
-### 6.3 開發備註
+### 6.2 開發備註
 
 - KMB API 回傳的 `eta` 欄位為 ISO 8601 時間字串，由前端計算剩餘分鐘數
 - GMB API 回傳的 `diff` 欄位為整數分鐘數
