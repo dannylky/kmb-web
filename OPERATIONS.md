@@ -84,7 +84,14 @@
 
 ## 2. 操作程序
 
-### 2.1 快速啟動
+### 2.1 首次設定（Git hooks 自動同步版本）
+
+```powershell
+cd C:\Works\OpenCode\kmb-web
+git config core.hooksPath .githooks
+```
+
+### 2.2 快速啟動
 
 ```powershell
 cd C:\Works\OpenCode\kmb-web
@@ -108,12 +115,17 @@ python -m http.server 8080
 - 瀏覽器：Chrome 90+ / Edge 90+ / Firefox 90+ / Safari 15+
 - 無需後端伺服器，KMB 及 GMB API 均直接從瀏覽器呼叫
 
-### 2.3 發布至 GitHub Pages
+### 發布流程
 
 ```powershell
 cd C:\Works\OpenCode\kmb-web
+# 1. 更新 VERSION 檔案（手動編輯）
+# 2. 將版本號同步至 index.html
+python sync-version.py
+# 3. 提交
 git add -A
 git commit -m "vX.Y.Z: 變更說明"
+git tag vX.Y.Z
 git push origin master --tags
 ```
 
@@ -189,6 +201,11 @@ vMAJOR.MINOR.PATCH
 | **v0.14.0** | 2026-06-21 | MINOR | 重新加入 GMB Proxy (`gmb_proxy.py`)；`gmbRoutes()` 改為 async，先嘗試 proxy 取得即時 ETA，失敗則 fallback 為「暫無班次」 | `912e0c4` |
 | **v0.15.0** | 2026-06-21 | MINOR | 改用 GMB 官方 API 直連 (`data.etagmb.gov.hk`)，移除 proxy 依賴；API 回應包含 `Vary: Origin` 可處理 CORS | `de00b37` |
 | **v1.0.0** | 2026-06-21 | MAJOR | 新增置頂功能：每張卡上加入 📌 按鈕，置頂路線優先排序顯示（即使無 ETA 仍以卡片顯示「暫未服務」）；新增 `sortRoutes()`、`refreshCurrentTab()`、pin 狀態儲存於 localStorage | `0367da1` |
+| **v1.0.1** | 2026-06-21 | PATCH | 提升版本字型大小及透明度以改善 mobile 可讀性 | `14ec496` |
+| **v1.0.2** | 2026-06-21 | PATCH | 移除 mobile media query 中 `.version { display:none }` 使版本號在 mobile 可見 | `d5a82a5` |
+| **v1.0.3** | 2026-06-21 | PATCH | Mobile 站點選單改用 `flex-wrap: wrap` 自動換行 | `01574e8` |
+| **v1.0.4** | 2026-06-21 | PATCH | Mobile dash-grid 改用 `repeat(auto-fill, minmax(280px, 1fr))` 多欄排列 | `f22dfa1` |
+| **v1.0.5** | 2026-06-21 | PATCH | 新增 `.githooks/pre-commit` hook 自動同步 VERSION → index.html；修正版本號不一致 | `d22b9c2` |
 
 ---
 
