@@ -163,9 +163,9 @@
 <body>
 
 <div class="header">
-  <h1>🚍 KMB 巴士即時到站 <small>九巴實時到站監控面板</small> <span class="version">v1.0.8</span></h1>
+  <h1>🚍 KMB 巴士即時到站 <small>九巴實時到站監控面板</small> <span class="version">v1.0.9</span></h1>
   <div class="tabs">
-    <button class="tab active" data-tab="hsuhk">🏫 恒大概覽</button>
+    <button class="tab active" data-tab="hsuhk">🏫 香港恒生大學</button>
     <button class="tab" data-tab="mplus">🎨 柯士甸道西 (YT262)</button>
     <button class="tab" data-tab="st884">🚌 廣源 (ST884)</button>
     <button class="tab" data-tab="st894">🚌 黃泥頭 (ST894)</button>
@@ -689,10 +689,15 @@ let hsuhkStopName = '';
 async function refreshHsuhkDashboard() {
   try {
     if (!hsuhkStopName) {
-      const d = await fetchJSON(`${API}/stop/${HSUHK_STOPS[0]}`).catch(() => ({}));
-      hsuhkStopName = d.name_tc || '香港恒生大學';
-      const en = d.name_en || 'THE HANG SENG UNIVERSITY OF HONG KONG';
-      $('#hsuhkHeaderName').innerHTML = `🏫 ${hsuhkStopName} <small>${en}</small>`;
+      const [d0, d1] = await Promise.all([
+        fetchJSON(`${API}/stop/${HSUHK_STOPS[0]}`).catch(() => ({})),
+        fetchJSON(`${API}/stop/${HSUHK_STOPS[1]}`).catch(() => ({})),
+      ]);
+      hsuhkStopName = d0.name_tc || '香港恒生大學';
+      const n0 = d0.name_tc || '香港恒生大學';
+      const n1 = d1.name_tc || '香港恒生大學';
+      const en0 = d0.name_en || 'THE HANG SENG UNIVERSITY OF HONG KONG';
+      $('#hsuhkHeaderName').innerHTML = `🏫 ${n0.replace(/\(.*\)/,'').trim()} <small>${en0.replace(/\(.*\)/,'').trim()}</small> <span style="font-size:11px;opacity:.6">${n0} · ${n1}</span>`;
     }
 
     const [etasA, etasB] = await Promise.all([
