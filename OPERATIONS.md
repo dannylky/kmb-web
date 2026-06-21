@@ -3,7 +3,7 @@
 - **系統名稱**: KMB Real-time Bus ETA Dashboard
 - **程式碼位置**: `C:\Works\OpenCode\kmb-web`
 - **GitHub**: `https://github.com/dannylky/kmb-web`
-- **目前版本**: **v0.9.0**
+- **目前版本**: **v0.10.0**
 - **上次更新**: 2026-06-21
 
 ---
@@ -187,6 +187,7 @@ vMAJOR.MINOR.PATCH
 | **v0.8.0** | 2026-06-21 | MINOR | 無服務路線改為頂欄「暫未服務」統一顯示 | `5acaf41` |
 | **v0.8.1** | 2026-06-21 | PATCH | 無服務路線 ETA 恢復時自動回到正常卡片區 | `5acaf41`（同次修正） |
 | **v0.9.0** | 2026-06-21 | MINOR | 新增 `gmb_proxy.py` CORS Proxy；index.html 切換至 proxy URL 解決 GMB CORS 封鎖 | — |
+| **v0.10.0** | 2026-06-21 | MINOR | KMB-first：綠Van路線先查 KMB API（有資料則用），無資料時才 fallback 至 GMB proxy | `17ffc30` |
 
 ---
 
