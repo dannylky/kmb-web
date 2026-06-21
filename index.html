@@ -160,7 +160,7 @@
 <body>
 
 <div class="header">
-  <h1>🚍 KMB 巴士即時到站 <small>九巴實時到站監控面板</small> <span class="version">v0.12.1</span></h1>
+  <h1>🚍 KMB 巴士即時到站 <small>九巴實時到站監控面板</small> <span class="version">v0.13.0</span></h1>
   <div class="tabs">
     <button class="tab active" data-tab="hsuhk">🏫 恒大概覽 (ST330)</button>
     <button class="tab" data-tab="mplus">🎨 柯士甸道西 (YT262)</button>
@@ -295,6 +295,26 @@ const ST894_STOPS = [
   { id: 'F0852C7827CC97EB', name: '黃泥頭巴士總站 (ST890)' },
 ];
 const ST894_ROUTES = ['86', 'A42', 'NA41', '83K', '83S', '83X'];
+
+const HSUHK_GMB = [
+  { route: '808', dirKey: 'outbound', dest: '威爾斯親王醫院' },
+  { route: '808', dirKey: 'inbound', dest: '錦英苑' },
+  { route: '806A', dirKey: 'outbound', dest: '運頭塘' },
+  { route: '806A', dirKey: 'inbound', dest: '黃泥頭' },
+  { route: '806X', dirKey: 'outbound', dest: '運頭塘' },
+  { route: '806X', dirKey: 'inbound', dest: '黃泥頭' },
+];
+const ST884_GMB = [
+  { route: '804', dirKey: 'outbound', dest: '顯徑' },
+  { route: '804', dirKey: 'inbound', dest: '廣源' },
+  { route: '806A', dirKey: 'outbound', dest: '運頭塘' },
+  { route: '806A', dirKey: 'inbound', dest: '黃泥頭' },
+];
+const ST894_GMB = [
+  { route: '65K', dirKey: 'outbound', dest: '火炭站 (循環線)' },
+  { route: '806A', dirKey: 'outbound', dest: '運頭塘' },
+  { route: '806A', dirKey: 'inbound', dest: '黃泥頭' },
+];
 
 const ST790_STOP = '3114213F8975F536';
 const ST790_ROUTES = ['75X', '82X', '85M', '272S', '83X', '89C', '89X', '307', '373', '678', '680', '681', 'N307', '74X', '673', '681P', '85X', '88', '88X', '80X', '90', '78C', '78X', '682'];
@@ -573,7 +593,19 @@ function diffClass(diff) {
   return 'later';
 }
 
+function gmbRoutes(config) {
+  const map = {};
+  config.forEach(g => {
+    if (!map[g.route]) map[g.route] = { route: g.route, dirs: {}, forceCard: true };
+    if (!map[g.route].dirs[g.dirKey]) {
+      map[g.route].dirs[g.dirKey] = { dir: g.dirKey, etas: [], dest_tc: g.dest };
+    }
+  });
+  return Object.values(map);
+}
+
 function routeHasEta(r) {
+  if (r.forceCard) return true;
   return Object.values(r.dirs).some(d => d.etas.length > 0);
 }
 
@@ -623,6 +655,9 @@ async function refreshHsuhkDashboard() {
     });
 
     const merged = Object.values(routeMap);
+    gmbRoutes(HSUHK_GMB).forEach(g => {
+      if (!merged.find(m => m.route === g.route)) merged.push(g);
+    });
 
     const sorted = merged.sort((a, b) => {
       const na = parseInt(a.route), nb = parseInt(b.route);
@@ -884,6 +919,9 @@ async function refreshSt884Dashboard() {
     });
 
     const sorted = ST884_ROUTES.filter(r => routeMap[r]).map(r => routeMap[r]);
+    gmbRoutes(ST884_GMB).forEach(g => {
+      if (!sorted.find(r => r.route === g.route)) sorted.push(g);
+    });
 
     renderSt884Cards(sorted);
     $('#st884Count').textContent = sorted.length + ' 條路線';
@@ -1019,6 +1057,9 @@ async function refreshSt894Dashboard() {
     });
 
     const sorted = ST894_ROUTES.filter(r => routeMap[r]).map(r => routeMap[r]);
+    gmbRoutes(ST894_GMB).forEach(g => {
+      if (!sorted.find(r => r.route === g.route)) sorted.push(g);
+    });
 
     renderSt894Cards(sorted);
     $('#st894Count').textContent = sorted.length + ' 條路線';
