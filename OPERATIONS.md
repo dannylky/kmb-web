@@ -3,7 +3,7 @@
 - **系統名稱**: KMB Real-time Bus ETA Dashboard
 - **程式碼位置**: `C:\Works\OpenCode\kmb-web`
 - **GitHub**: `https://github.com/dannylky/kmb-web`
-- **目前版本**: **v0.15.0**
+- **目前版本**: **v1.0.0**
 - **上次更新**: 2026-06-21
 
 ---
@@ -188,6 +188,7 @@ vMAJOR.MINOR.PATCH
 | **v0.13.0** | 2026-06-21 | MINOR | 重新加入 GMB 路線並強制以卡片顯示（不經「暫未服務」欄），卡內顯示「暫無班次」 | `c64cb63` |
 | **v0.14.0** | 2026-06-21 | MINOR | 重新加入 GMB Proxy (`gmb_proxy.py`)；`gmbRoutes()` 改為 async，先嘗試 proxy 取得即時 ETA，失敗則 fallback 為「暫無班次」 | `912e0c4` |
 | **v0.15.0** | 2026-06-21 | MINOR | 改用 GMB 官方 API 直連 (`data.etagmb.gov.hk`)，移除 proxy 依賴；API 回應包含 `Vary: Origin` 可處理 CORS | `de00b37` |
+| **v1.0.0** | 2026-06-21 | MAJOR | 新增置頂功能：每張卡上加入 📌 按鈕，置頂路線優先排序顯示（即使無 ETA 仍以卡片顯示「暫未服務」）；新增 `sortRoutes()`、`refreshCurrentTab()`、pin 狀態儲存於 localStorage | `0367da1` |
 
 ---
 

@@ -116,6 +116,10 @@
   .dash-card.later { border-left-color: #2563eb; }
   .dash-card .d-route-bar { display: flex; align-items: center; gap: 8px; padding: 10px 14px 6px; }
   .dash-card .d-route { font-size: 20px; font-weight: 800; color: #00a862; min-width: 48px; }
+  .d-pin { background: none; border: none; cursor: pointer; font-size: 14px; padding: 0 2px; opacity: 0.2; transition: opacity .15s; line-height: 1; }
+  .d-pin::before { content: '📌'; }
+  .d-pin:hover { opacity: 0.6; }
+  .d-pin.pinned { opacity: 0.9; }
   .dash-card .d-dir-section { padding: 4px 14px 10px; }
   .dash-card .d-dir-section + .d-dir-section { border-top: 1px solid rgba(255,255,255,.06); padding-top: 10px; }
   .dash-card .d-dir-head { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; }
@@ -160,7 +164,7 @@
 <body>
 
 <div class="header">
-  <h1>🚍 KMB 巴士即時到站 <small>九巴實時到站監控面板</small> <span class="version">v0.15.0</span></h1>
+  <h1>🚍 KMB 巴士即時到站 <small>九巴實時到站監控面板</small> <span class="version">v1.0.0</span></h1>
   <div class="tabs">
     <button class="tab active" data-tab="hsuhk">🏫 恒大概覽 (ST330)</button>
     <button class="tab" data-tab="mplus">🎨 柯士甸道西 (YT262)</button>
@@ -276,6 +280,7 @@
 <script>
 const API = 'https://data.etabus.gov.hk/v1/transport/kmb';
 const LS_KEY = 'kmb_bookmarks';
+const PIN_KEY = 'kmb_pinned';
 const GMB_API = 'https://data.etagmb.gov.hk';
 const HSUHK_STOPS = ['3F01C915E856B018', 'BC39BFC3C7BC3009'];
 const MPLUS_STOP = '0CC0B21EFF42EE19';
@@ -343,6 +348,38 @@ function loadBookmarks() {
 
 function saveBookmarks() {
   localStorage.setItem(LS_KEY, JSON.stringify(bookmarks));
+}
+
+function loadPinned() {
+  try { return JSON.parse(localStorage.getItem(PIN_KEY)) || []; } catch(e) { return []; }
+}
+
+function savePinned(arr) {
+  localStorage.setItem(PIN_KEY, JSON.stringify(arr));
+}
+
+function togglePin(route) {
+  let pinned = loadPinned();
+  if (pinned.includes(route)) pinned = pinned.filter(r => r !== route);
+  else pinned.push(route);
+  savePinned(pinned);
+  return pinned.includes(route);
+}
+
+function isPinned(route) {
+  return loadPinned().includes(route);
+}
+
+function sortRoutes(arr) {
+  const pinned = loadPinned();
+  return arr.sort((a, b) => {
+    const aPin = pinned.includes(a.route) ? 0 : 1;
+    const bPin = pinned.includes(b.route) ? 0 : 1;
+    if (aPin !== bPin) return aPin - bPin;
+    const na = parseInt(a.route), nb = parseInt(b.route);
+    if (!isNaN(na) && !isNaN(nb)) return na - nb;
+    return a.route.localeCompare(b.route, undefined, {numeric: true});
+  });
 }
 
 function hasBookmark(route, dir) {
@@ -562,6 +599,14 @@ function stopAutoRefresh() {
   if (refreshInterval) { clearInterval(refreshInterval); refreshInterval = null; }
 }
 
+function refreshCurrentTab() {
+  if (activeTab === 'hsuhk') refreshHsuhkDashboard();
+  else if (activeTab === 'mplus') refreshMplusDashboard();
+  else if (activeTab === 'st884') refreshSt884Dashboard();
+  else if (activeTab === 'st894') refreshSt894Dashboard();
+  else if (activeTab === 'st790') refreshSt790Dashboard();
+}
+
 let toastTimer = null;
 function showToast(msg) {
   let t = $('#toast');
@@ -674,13 +719,8 @@ async function refreshHsuhkDashboard() {
       if (!merged.find(m => m.route === g.route)) merged.push(g);
     });
 
-    const sorted = merged.sort((a, b) => {
-      const na = parseInt(a.route), nb = parseInt(b.route);
-      if (!isNaN(na) && !isNaN(nb)) return na - nb;
-      return a.route.localeCompare(b.route, undefined, {numeric: true});
-    });
-
-    renderHsuhkCards(sorted);
+    sortRoutes(merged);
+    renderHsuhkCards(merged);
     $('#dashCount').textContent = sorted.length + ' 條路線';
     $('#dashUpdated').textContent = '更新於 ' + new Date().toLocaleTimeString('zh-HK');
     $('#dashUpdatedBar').style.display = 'block';
@@ -699,8 +739,8 @@ function renderHsuhkCards(routes) {
     return;
   }
 
-  const inactive = routes.filter(r => !routeHasEta(r));
-  const active = routes.filter(r => routeHasEta(r));
+  const inactive = routes.filter(r => !routeHasEta(r) && !isPinned(r.route));
+  const active = routes.filter(r => routeHasEta(r) || isPinned(r.route));
   renderNoSvcBar(grid, inactive);
 
   active.forEach(r => {
@@ -716,7 +756,7 @@ function renderHsuhkCards(routes) {
 
     const bar = document.createElement('div');
     bar.className = 'd-route-bar';
-    bar.innerHTML = `<span class="d-route">${r.route}</span>`;
+    bar.innerHTML = `<button class="d-pin${isPinned(r.route)?' pinned':''}" data-route="${r.route}"></button><span class="d-route">${r.route}</span>`;
     card.appendChild(bar);
 
     ['inbound', 'outbound'].forEach(dir => {
@@ -768,6 +808,13 @@ function renderHsuhkCards(routes) {
       card.appendChild(section);
     });
 
+    if (!Object.keys(r.dirs).length) {
+      const ns = document.createElement('div');
+      ns.className = 'd-no-eta';
+      ns.textContent = '暫未服務';
+      card.appendChild(ns);
+    }
+
     grid.appendChild(card);
   });
 }
@@ -800,7 +847,7 @@ async function refreshMplusDashboard() {
     });
 
     const sorted = MPLUS_ROUTES.map(r => routeMap[r]);
-
+    sortRoutes(sorted);
     renderMplusCards(sorted);
     $('#mplusCount').textContent = sorted.length + ' 條路線';
     $('#mplusUpdated').textContent = '更新於 ' + new Date().toLocaleTimeString('zh-HK');
@@ -820,8 +867,8 @@ function renderMplusCards(routes) {
     return;
   }
 
-  const inactive = routes.filter(r => !routeHasEta(r));
-  const active = routes.filter(r => routeHasEta(r));
+  const inactive = routes.filter(r => !routeHasEta(r) && !isPinned(r.route));
+  const active = routes.filter(r => routeHasEta(r) || isPinned(r.route));
   renderNoSvcBar(grid, inactive);
 
   active.forEach(r => {
@@ -837,7 +884,7 @@ function renderMplusCards(routes) {
 
     const bar = document.createElement('div');
     bar.className = 'd-route-bar';
-    bar.innerHTML = `<span class="d-route">${r.route}</span>`;
+    bar.innerHTML = `<button class="d-pin${isPinned(r.route)?' pinned':''}" data-route="${r.route}"></button><span class="d-route">${r.route}</span>`;
     card.appendChild(bar);
 
     ['inbound', 'outbound'].forEach(dir => {
@@ -889,6 +936,13 @@ function renderMplusCards(routes) {
       card.appendChild(section);
     });
 
+    if (!Object.keys(r.dirs).length) {
+      const ns = document.createElement('div');
+      ns.className = 'd-no-eta';
+      ns.textContent = '暫未服務';
+      card.appendChild(ns);
+    }
+
     grid.appendChild(card);
   });
 }
@@ -937,6 +991,7 @@ async function refreshSt884Dashboard() {
     (await gmbRoutes(ST884_GMB)).forEach(g => {
       if (!sorted.find(r => r.route === g.route)) sorted.push(g);
     });
+    sortRoutes(sorted);
 
     renderSt884Cards(sorted);
     $('#st884Count').textContent = sorted.length + ' 條路線';
@@ -957,8 +1012,8 @@ function renderSt884Cards(routes) {
     return;
   }
 
-  const inactive = routes.filter(r => !routeHasEta(r));
-  const active = routes.filter(r => routeHasEta(r));
+  const inactive = routes.filter(r => !routeHasEta(r) && !isPinned(r.route));
+  const active = routes.filter(r => routeHasEta(r) || isPinned(r.route));
   renderNoSvcBar(grid, inactive);
 
   active.forEach(r => {
@@ -974,7 +1029,7 @@ function renderSt884Cards(routes) {
 
     const bar = document.createElement('div');
     bar.className = 'd-route-bar';
-    bar.innerHTML = `<span class="d-route">${r.route}</span>`;
+    bar.innerHTML = `<button class="d-pin${isPinned(r.route)?' pinned':''}" data-route="${r.route}"></button><span class="d-route">${r.route}</span>`;
     card.appendChild(bar);
 
     ['inbound', 'outbound'].forEach(dir => {
@@ -1027,6 +1082,13 @@ function renderSt884Cards(routes) {
       card.appendChild(section);
     });
 
+    if (!Object.keys(r.dirs).length) {
+      const ns = document.createElement('div');
+      ns.className = 'd-no-eta';
+      ns.textContent = '暫未服務';
+      card.appendChild(ns);
+    }
+
     grid.appendChild(card);
   });
 }
@@ -1075,6 +1137,7 @@ async function refreshSt894Dashboard() {
     (await gmbRoutes(ST894_GMB)).forEach(g => {
       if (!sorted.find(r => r.route === g.route)) sorted.push(g);
     });
+    sortRoutes(sorted);
 
     renderSt894Cards(sorted);
     $('#st894Count').textContent = sorted.length + ' 條路線';
@@ -1095,8 +1158,8 @@ function renderSt894Cards(routes) {
     return;
   }
 
-  const inactive = routes.filter(r => !routeHasEta(r));
-  const active = routes.filter(r => routeHasEta(r));
+  const inactive = routes.filter(r => !routeHasEta(r) && !isPinned(r.route));
+  const active = routes.filter(r => routeHasEta(r) || isPinned(r.route));
   renderNoSvcBar(grid, inactive);
 
   active.forEach(r => {
@@ -1112,7 +1175,7 @@ function renderSt894Cards(routes) {
 
     const bar = document.createElement('div');
     bar.className = 'd-route-bar';
-    bar.innerHTML = `<span class="d-route">${r.route}</span>`;
+    bar.innerHTML = `<button class="d-pin${isPinned(r.route)?' pinned':''}" data-route="${r.route}"></button><span class="d-route">${r.route}</span>`;
     card.appendChild(bar);
 
     ['inbound', 'outbound'].forEach(dir => {
@@ -1165,6 +1228,13 @@ function renderSt894Cards(routes) {
       card.appendChild(section);
     });
 
+    if (!Object.keys(r.dirs).length) {
+      const ns = document.createElement('div');
+      ns.className = 'd-no-eta';
+      ns.textContent = '暫未服務';
+      card.appendChild(ns);
+    }
+
     grid.appendChild(card);
   });
 }
@@ -1190,6 +1260,7 @@ async function refreshSt790Dashboard() {
     });
 
     const sorted = ST790_ROUTES.filter(r => routeMap[r]).map(r => routeMap[r]);
+    sortRoutes(sorted);
 
     renderSt790Cards(sorted);
     $('#st790Count').textContent = sorted.length + ' 條路線';
@@ -1210,8 +1281,8 @@ function renderSt790Cards(routes) {
     return;
   }
 
-  const inactive = routes.filter(r => !routeHasEta(r));
-  const active = routes.filter(r => routeHasEta(r));
+  const inactive = routes.filter(r => !routeHasEta(r) && !isPinned(r.route));
+  const active = routes.filter(r => routeHasEta(r) || isPinned(r.route));
   renderNoSvcBar(grid, inactive);
 
   active.forEach(r => {
@@ -1227,7 +1298,7 @@ function renderSt790Cards(routes) {
 
     const bar = document.createElement('div');
     bar.className = 'd-route-bar';
-    bar.innerHTML = `<span class="d-route">${r.route}</span>`;
+    bar.innerHTML = `<button class="d-pin${isPinned(r.route)?' pinned':''}" data-route="${r.route}"></button><span class="d-route">${r.route}</span>`;
     card.appendChild(bar);
 
     ['inbound', 'outbound'].forEach(dir => {
@@ -1278,6 +1349,13 @@ function renderSt790Cards(routes) {
 
       card.appendChild(section);
     });
+
+    if (!Object.keys(r.dirs).length) {
+      const ns = document.createElement('div');
+      ns.className = 'd-no-eta';
+      ns.textContent = '暫未服務';
+      card.appendChild(ns);
+    }
 
     grid.appendChild(card);
   });
@@ -1412,6 +1490,16 @@ $('#routeInput').addEventListener('keydown', function(e) {
 });
 
 document.addEventListener('click', function(e) {
+  const pinBtn = e.target.closest('.d-pin');
+  if (pinBtn) {
+    const route = pinBtn.dataset.route;
+    const pinned = togglePin(route);
+    pinBtn.classList.toggle('pinned', pinned);
+    showToast(pinned ? `🔖 已置頂 ${route}` : `已取消置頂 ${route}`);
+    refreshCurrentTab();
+    return;
+  }
+
   const dd = $('#searchDropdown');
   const input = $('#routeInput');
   if (!input.contains(e.target) && !dd.contains(e.target)) {
@@ -1427,19 +1515,8 @@ $$('.tab').forEach(tab => {
     $$('.panel').forEach(p => p.classList.remove('active'));
     $('#panel-' + activeTab).classList.add('active');
     stopAutoRefresh();
-    if (activeTab === 'hsuhk') {
-      refreshHsuhkDashboard();
-    } else if (activeTab === 'mplus') {
-      refreshMplusDashboard();
-    } else if (activeTab === 'st884') {
-      refreshSt884Dashboard();
-    } else if (activeTab === 'st894') {
-      refreshSt894Dashboard();
-    } else if (activeTab === 'st790') {
-      refreshSt790Dashboard();
-    } else if (activeTab === 'bookmarks' && bookmarks.length) {
-      refreshAllBookmarks();
-    }
+    if (activeTab === 'bookmarks') { if (bookmarks.length) refreshAllBookmarks(); }
+    else refreshCurrentTab();
     startAutoRefresh();
   });
 });
