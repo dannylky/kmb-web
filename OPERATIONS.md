@@ -3,7 +3,7 @@
 - **系統名稱**: KMB Real-time Bus ETA Dashboard
 - **程式碼位置**: `C:\Works\OpenCode\kmb-web`
 - **GitHub**: `https://github.com/dannylky/kmb-web`
-- **目前版本**: **v0.11.0**
+- **目前版本**: **v0.12.0**
 - **上次更新**: 2026-06-21
 
 ---
@@ -53,6 +53,7 @@
 
 1. **KMB 到站資料**: 瀏覽器直接呼叫 `https://data.etabus.gov.hk/v1/transport/kmb/stop-eta/{stopId}`（API 支援 CORS `*`）
 2. **路線列表**: 瀏覽器直接呼叫 `https://data.etabus.gov.hk/v1/transport/kmb/route/`
+3. **GMB 路線**: 前端硬編碼 route config，無 API 呼叫；路線顯示在「暫未服務」欄
 
 ### 1.4 API 端點一覽
 
@@ -63,14 +64,14 @@
 
 ### 1.5 分頁配置
 
-| 分頁 ID | 顯示名稱 | Stop IDs | 路線數 |
-|---------|---------|----------|--------|
-| hsuhk | 🏫 恒大概覽 (ST330) | `3F01C915E856B018`, `BC39BFC3C7BC3009` | 所有經停路線 |
-| mplus | 🎨 柯士甸道西 (YT262) | `0CC0B21EFF42EE19` | 9 (固定) |
-| st884 | 🚌 廣源 (ST884) | 4 個停車點 | 8 (固定) |
-| st894 | 🚌 黃泥頭 (ST894) | 4 個停車點 | 6 (固定) |
-| st790 | 🚌 大老山 (ST790) | `3114213F8975F536` | 24 (固定) |
-| bookmarks | 📌 我的路線 | 動態（自訂） | 使用者自訂 |
+| 分頁 ID | 顯示名稱 | Stop IDs | 路線數 | GMB 路線（靜態佔位） |
+|---------|---------|----------|--------|---------------------|
+| hsuhk | 🏫 恒大概覽 (ST330) | `3F01C915E856B018`, `BC39BFC3C7BC3009` | 所有經停路線 | 808, 806A, 806X |
+| mplus | 🎨 柯士甸道西 (YT262) | `0CC0B21EFF42EE19` | 9 (固定) | — |
+| st884 | 🚌 廣源 (ST884) | 4 個停車點 | 8 (固定) | 804, 806A |
+| st894 | 🚌 黃泥頭 (ST894) | 4 個停車點 | 6 (固定) | 65K, 806A |
+| st790 | 🚌 大老山 (ST790) | `3114213F8975F536` | 24 (固定) | — |
+| bookmarks | 📌 我的路線 | 動態（自訂） | 使用者自訂 | — |
 
 ### 1.6 更新機制
 
@@ -179,6 +180,7 @@ vMAJOR.MINOR.PATCH
 | **v0.9.0** | 2026-06-21 | MINOR | 新增 `gmb_proxy.py` CORS Proxy；index.html 切換至 proxy URL 解決 GMB CORS 封鎖 | — |
 | **v0.10.0** | 2026-06-21 | MINOR | KMB-first：綠Van路線先查 KMB API（有資料則用），無資料時才 fallback 至 GMB proxy | `17ffc30` |
 | **v0.11.0** | 2026-06-21 | MINOR | 移除所有 GMB proxy 相關程式碼，只保留 KMB API；刪除 `gmb_proxy.py`、GMB route configs、GMB fetch 函數、綠Van badge 及相關渲染邏輯 | `1276d38` |
+| **v0.12.0** | 2026-06-21 | MINOR | 重新加入 GMB 路線 config 作為靜態佔位符，顯示於各 dashboard 的「暫未服務」欄（僅 KMB API，無 proxy） | `1191574` |
 
 ---
 
