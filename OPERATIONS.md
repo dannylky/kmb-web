@@ -3,7 +3,7 @@
 - **系統名稱**: KMB Real-time Bus ETA Dashboard
 - **程式碼位置**: `C:\Works\OpenCode\kmb-web`
 - **GitHub**: `https://github.com/dannylky/kmb-web`
-- **目前版本**: **v0.14.0**
+- **目前版本**: **v0.15.0**
 - **上次更新**: 2026-06-21
 
 ---
@@ -46,7 +46,6 @@
 | 元件 | 位置 | 說明 |
 |------|------|------|
 | **index.html** | `kmb-web/index.html` | 單頁式應用 (SPA)，純前端，無需 build 工具。內含全部 HTML、CSS、JavaScript。 |
-| **gmb_proxy.py** | `kmb-web/gmb_proxy.py` | CORS Proxy 伺服器，將瀏覽器請求轉發至 GMB API 並回補 CORS headers。純 Python stdlib，無額外依賴。 |
 
 | **MCP-KMB-HK** | `C:\Works\OpenCode\MCP-KMB-HK` | FastMCP 伺服器，提供 8 個 KMB API 工具給 opencode 使用。與網頁獨立運作。 |
 
@@ -54,15 +53,14 @@
 
 1. **KMB 到站資料**: 瀏覽器直接呼叫 `https://data.etabus.gov.hk/v1/transport/kmb/stop-eta/{stopId}`（API 支援 CORS `*`）
 2. **路線列表**: 瀏覽器直接呼叫 `https://data.etabus.gov.hk/v1/transport/kmb/route/`
-3. **GMB 到站資料**: 瀏覽器呼叫 `http://localhost:8899/eta/stop/{stopId}` → gmb_proxy.py 轉發至 `https://data.etagmb.gov.hk/eta/stop/{stopId}` → 回傳含 CORS headers 的回應；若 proxy 無回應則 fallback 為空 ETA（卡內顯示「暫無班次」）
+3. **GMB 到站資料**: 瀏覽器直接呼叫 `https://data.etagmb.gov.hk/eta/stop/{stopId}`（API 透過 `Vary: Origin` 動態回補 `Access-Control-Allow-Origin: *`）；若 CORS 失敗則 fallback 為空 ETA（卡內顯示「暫無班次」）
 
 ### 1.4 API 端點一覽
 
 | API | 基礎 URL | CORS 支援 |
 |-----|---------|-----------|
 | KMB Open API | `https://data.etabus.gov.hk/v1/transport/kmb` | ✅ 原生支援 |
-| GMB API | `https://data.etagmb.gov.hk` | ❌ 需經 proxy |
-| GMB Proxy | `http://localhost:8899` | ✅ Proxy 自行加入 |
+| GMB API | `https://data.etagmb.gov.hk` | ✅ 經 `Vary: Origin` 支援（瀏覽器自動帶入 Origin header） |
 
 ### 1.5 分頁配置
 
@@ -91,26 +89,24 @@
 ```powershell
 cd C:\Works\OpenCode\kmb-web
 
-# 1. 啟動 GMB Proxy（提供 GMB 即時 ETA）
-python gmb_proxy.py
-# 預設埠 8899，可指定：python gmb_proxy.py 9999
-
-# 2. 啟動網頁伺服器（選擇一種方式）
+# 1. 啟動網頁伺服器（選擇一種方式）
 # 選項 A: Python HTTP server
 python -m http.server 8080
 
 # 選項 B: 直接開啟 HTML
 # 直接雙擊 index.html
 
-# 3. 開啟瀏覽器
+# 2. 開啟瀏覽器
 # http://localhost:8080/
+
+# 無需 proxy — GMB API 直接從瀏覽器呼叫
 ```
 
 ### 2.2 前置需求
 
 - Python 3.8+（測試於 3.12）
 - 瀏覽器：Chrome 90+ / Edge 90+ / Firefox 90+ / Safari 15+
-- 無需後端伺服器，KMB API 直接從瀏覽器呼叫
+- 無需後端伺服器，KMB 及 GMB API 均直接從瀏覽器呼叫
 
 ### 2.3 發布至 GitHub Pages
 
@@ -134,7 +130,7 @@ opencode
 
 | 問題 | 原因 | 解決方法 |
 |------|------|---------|
-| GMB 路線顯示「暫無班次」 | GMB Proxy 未啟動或無法連線 | 執行 `python gmb_proxy.py`，或在 mobile/GitHub Pages 上此為正常行為（需本機 proxy） |
+| GMB 路線顯示「暫無班次」 | GMB API 的 CORS 被 CDN 快取封鎖（首次請求無 Origin header 導致快取無 CORS headers） | 重新整理頁面數次，或清除 CloudFront 快取；若持續則為 API/CDN 層問題 |
 | 所有路線顯示「暫未服務」 | KMB API 無法存取或網路問題 | 檢查網路連線，或 KMB API 暫時維護 |
 | 搜尋無結果 | 路線列表未載入 | 重新整理頁面 |
 
@@ -191,6 +187,7 @@ vMAJOR.MINOR.PATCH
 | **v0.12.1** | 2026-06-21 | PATCH | 從「暫未服務」欄排除所有 GMB 路線（靜態佔位符只會佔用版面，無實際用途） | `181d662` |
 | **v0.13.0** | 2026-06-21 | MINOR | 重新加入 GMB 路線並強制以卡片顯示（不經「暫未服務」欄），卡內顯示「暫無班次」 | `c64cb63` |
 | **v0.14.0** | 2026-06-21 | MINOR | 重新加入 GMB Proxy (`gmb_proxy.py`)；`gmbRoutes()` 改為 async，先嘗試 proxy 取得即時 ETA，失敗則 fallback 為「暫無班次」 | `912e0c4` |
+| **v0.15.0** | 2026-06-21 | MINOR | 改用 GMB 官方 API 直連 (`data.etagmb.gov.hk`)，移除 proxy 依賴；API 回應包含 `Vary: Origin` 可處理 CORS | `de00b37` |
 
 ---
 
@@ -199,8 +196,7 @@ vMAJOR.MINOR.PATCH
 | 檔案 | 說明 |
 |------|------|
 | `index.html` | 主網頁（單頁應用） |
-
-| `gmb_proxy.py` | GMB CORS Proxy 伺服器 |
+| `opencode.json` | opencode MCP 設定檔 |
 | `OPERATIONS.md` | 本文件 |
 | `MCP-KMB-HK/server.py` | FastMCP KMB API 工具伺服器 |
 | `MCP-KMB-HK/pyproject.toml` | Python 專案設定與相依性 |
@@ -220,13 +216,7 @@ GET /stop-eta/{stopId}                  — 站點 ETA
 GET /route-stop/{route}/{dir}/{st}      — 路線經停站
 ```
 
-### 6.2 GMB Proxy API 端點
-
-```
-GET /eta/stop/{stopId}                  — 站點 GMB ETA
-```
-
-### 6.3 開發備註
+### 6.2 開發備註
 
 - KMB API 回傳的 `eta` 欄位為 ISO 8601 時間字串，由前端計算剩餘分鐘數
 - GMB API 回傳的 `diff` 欄位為整數分鐘數
